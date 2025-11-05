@@ -25,7 +25,7 @@ class AFE_FET:
         self.Vold = self.voltage
         self.Iold = self.current
         self.voltage = Vnew
-        if Vnew <= self.Vstart:
+        if Vnew <= self.Vstart and abs(self.Iold) < 1e-1:
             self.current = 0
         else:
             if Vnew > self.Vold:
@@ -34,7 +34,7 @@ class AFE_FET:
                 else:
                     self.current = self.LinStep(self.Vold, Vnew, self.Iold, self.SlopeUp)
             else:
-                if Vnew > self.Vlh:
+                if Vnew >= self.Vlh:
                     self.current = self.LinStep(self.Vold, Vnew, self.Iold, 1/self.Ron)
                 else:
                     self.current = self.LinStep(self.Vold, Vnew, self.Iold, self.SlopeDown)
@@ -42,15 +42,15 @@ class AFE_FET:
 
 
 
-x = AFE_FET(0, 1, 1, 5, 2, 10, 10)
-Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0]
+x = AFE_FET(1, 1, 1, 5, 2, 10, 10)
+#Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,5,6,7,8,7,6,5,4,3,2,1,2,1,0]
+Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0.7,0.5,0.3,0]
 Ilist = []
 for V in Vlist:
     x.Update(V)
     Ilist.append(x.current)
 
+print(Ilist)
 plt.close()
 plt.plot(Vlist, Ilist)
 plt.show()
-
-
