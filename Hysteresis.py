@@ -19,14 +19,17 @@ class AFE_FET:
 
     # A linear stepper with variable slope
     def LinStep(self, Vold, Vnew, Iold, slope):
-        return slope*(Vnew-Vold)  + Iold
+        return slope*(Vnew-Vold) + Iold
 
     def Update(self, Vnew):
         self.Vold = self.voltage
         self.Iold = self.current
         self.voltage = Vnew
-        if Vnew <= self.Vstart and abs(self.Iold) < 1e-1:
-            self.current = 0
+        if Vnew <= self.Vstart:
+            if Vnew > self.Vold:
+                self.current = self.Iold
+            else:
+                self.current = self.LinStep(self.Vold, Vnew, self.Iold, self.SlopeDown)
         else:
             if Vnew > self.Vold:
                 if Vnew <= self.Vhl:
@@ -42,9 +45,9 @@ class AFE_FET:
 
 
 
-x = AFE_FET(1, 1, 1, 5, 2, 10, 10)
+x = AFE_FET(0, 1, 1, 5, 3, 10, 10)
 #Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,5,6,7,8,7,6,5,4,3,2,1,2,1,0]
-Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0.7,0.5,0.3,0]
+Vlist = [1,3,2,8,4,6,3,7,3,1]
 Ilist = []
 for V in Vlist:
     x.Update(V)
