@@ -78,31 +78,40 @@ class AFE_FET:
                 if Vnew <= Vhl:
                     self.current = self.Line(Vnew, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau)
                 else:
-                    if Vnew >= self.Vold:
-                        self.current = self.Line(Vnew-Vhl, (Isat-Vhl/self.Roff)/(Vsat-Vhl), Vhl/self.Roff + self.Shift(t, self.deltaI, self.tau))
-                        if self.current >= UpperLimit:      #Sanity check
-                            self.current = UpperLimit
-                    else:
-                        self.current = self.Line(Vnew-Vsat, 1/self.Ron, Isat)
-                        self.stateOn = True
+                    self.current = self.Line(Vnew-Vhl, (Isat-Vhl/self.Roff)/(Vsat-Vhl), Vhl/self.Roff + self.Shift(t, self.deltaI, self.tau))
+                    if self.current >= UpperLimit:      #Sanity check
+                        self.current = UpperLimit
             else:
                 if Vnew >= Vlh:
                     self.current = self.Line(Vnew-Vsat, 1/self.Ron, Isat)
                 else:
-                    if Vnew <= self.Vold:
-                        self.stateOn = True
-                        self.current = self.Line(Vnew-Vstart, (self.Line(Vlh-Vsat, 1/self.Ron, Isat)-Vstart/self.Roff)/(Vlh-Vstart), Vstart/self.Roff+ self.Shift(t, self.deltaI, self.tau))
-                        if self.current >= UpperLimit:      #Sanity check
-                            self.current = UpperLimit
+                    self.stateOn = True
+                    self.current = self.Line(Vnew-Vstart, (self.Line(Vlh-Vsat, 1/self.Ron, Isat)-Vstart/self.Roff)/(Vlh-Vstart), Vstart/self.Roff+ self.Shift(t, self.deltaI, self.tau))
+                    if self.current >= UpperLimit:      #Sanity check
+                        self.current = UpperLimit
                         
 
 
 x = AFE_FET(1, 7, 10, 1e3, 1e3, 5, 3, 1000, 1, 1)
 
-TP = 8
+"""
+Vlist = [0,1,2,3,4,5,6,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-1,0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0]
+Ilist = []
+tlist = [0]
+for V in Vlist:
+    t = tlist[-1] + 0.1
+    tlist.append(t)
+    x.Update(V, t)
+    Ilist.append(x.current)
+
+plt.plot(Vlist, Ilist, color="blue")
+plt.show()
+"""
+
+TP = 10
 Alist = np.linspace(0, TP, 100)
 Blist = np.linspace(TP, 0, 100)
-Vlist = np.concatenate((Alist, Blist))
+Vlist = np.concatenate((Alist, Blist, Alist, Blist, Alist, Blist, Alist, Blist))
 Vlist2 = np.concatenate((Alist, Blist, Alist, Blist))
 #Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0]
 #Vlist = [1,3,2,8,4,6,3,7,3,1]
@@ -116,6 +125,7 @@ for V in Vlist:
     Ilist1.append(x.current)
 
 for V in Vlist:
+    pass
     t = tlist[-1] + 0.1
     tlist.append(t)
     x.Update(V, t)
@@ -126,5 +136,5 @@ print(x.SpikeTimes)
 #print(Ilist)
 plt.close()
 plt.plot(Vlist, Ilist1, color="red")
-plt.plot(Vlist, Ilist2, color="blue")
+#plt.plot(Vlist, Ilist2, color="blue")
 plt.show()
