@@ -40,6 +40,13 @@ class AFE_FET:
     def Line(self, V, slope, intersect):
         return slope*V + intersect
     
+    # Gives smooth growth between two given points and given slope at V0
+    def Smooth(self, V, V0, V1, I0, I1, slope):
+        a = (-slope*(V0-V1) + I0 - I1)/(V0*V1 - V1**2)
+        b = slope - a*V0
+        c = I0 - a*V0**2 - b*V0
+        return a*V**2 + b*V + c
+    
     def AddSpike(self, tSpike):
         self.SpikeTimes = np.append(self.SpikeTimes, tSpike)
 
@@ -64,10 +71,15 @@ class AFE_FET:
         UpperLimit = self.Line(Vnew-Vsat, 1/self.Ron, Isat)
         # Corresponding to the baseline through the origin
         if Vnew <= Vstart:
-            self.current = self.Line(Vnew, 1/self.Roff, 0)
+            if Vnew < self.Vstart0:
+                self.current = self.Line(Vnew, 1/self.Roff, 0)
+            else:
+                self.current = self.Smooth(Vnew, self.Vstart0, Vstart, self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau), 1/self.Roff)
+                print(Vnew,self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau))
+                print(t)
             if self.stateOn:
-                self.stateOn = False
-                self.AddSpike(t)
+                    self.stateOn = False
+                    self.AddSpike(t)
         # Correponding to the saturated current after Vsat
         elif Vnew >= Vsat:
             self.current = UpperLimit
@@ -75,16 +87,16 @@ class AFE_FET:
         # Corresponding to the loop
         else:
             if not self.stateOn:
-                if Vnew <= Vhl:
+                if Vnew <= Vhl:     # Segment 1
                     self.current = self.Line(Vnew, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau)
-                else:
+                else:               # Segment 2
                     self.current = self.Line(Vnew-Vhl, (Isat-Vhl/self.Roff)/(Vsat-Vhl), Vhl/self.Roff + self.Shift(t, self.deltaI, self.tau))
                     if self.current >= UpperLimit:      #Sanity check
                         self.current = UpperLimit
             else:
-                if Vnew >= Vlh:
+                if Vnew >= Vlh:     # Segment 3
                     self.current = self.Line(Vnew-Vsat, 1/self.Ron, Isat)
-                else:
+                else:               # Segment 4
                     self.stateOn = True
                     self.current = self.Line(Vnew-Vstart, (self.Line(Vlh-Vsat, 1/self.Ron, Isat)-Vstart/self.Roff)/(Vlh-Vstart), Vstart/self.Roff+ self.Shift(t, self.deltaI, self.tau))
                     if self.current >= UpperLimit:      #Sanity check
@@ -95,8 +107,8 @@ class AFE_FET:
 
 def main():
 
-    x = AFE_FET(1, 7, 10, 1e3, 1e3, 5, 3, 0.1, 1, 1)
-
+    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 10000, 1, 1)
+    """
     for tSpike in [0.3, 0.4, 0.8]:
         x.AddSpike(tSpike)
 
@@ -108,6 +120,7 @@ def main():
     plt.plot(tlist, Ilist)
     plt.show()
     print(x.SpikeTimes)
+    """
 
 
     """
@@ -123,8 +136,14 @@ def main():
     plt.plot(Vlist, Ilist, color="blue")
     plt.show()
     """
+    Vlist = np.linspace(0,2,200)
+    Ilist = []
+    for V in Vlist:
+        Ilist.append(x.Smooth(V, 0, 2, 0, 1, 0.2))
 
-    """
+    #plt.plot(Vlist, Ilist)
+    #plt.show()
+    
     TP = 10
     Alist = np.linspace(0, TP, 100)
     Blist = np.linspace(TP, 0, 100)
@@ -147,14 +166,13 @@ def main():
         x.Update(V, t)
         Ilist2.append(x.current)
 
-    print(x.SpikeTimes)
-
     #print(Ilist)
+    print(x.SpikeTimes)
     plt.close()
     plt.plot(Vlist, Ilist1, color="red")
     plt.plot(Vlist, Ilist2, color="blue")
     plt.show()
-    """
+    
 
 if __name__ == "__main__":
     main()
