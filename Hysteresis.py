@@ -92,49 +92,69 @@ class AFE_FET:
                         
 
 
-x = AFE_FET(1, 7, 10, 1e3, 1e3, 5, 3, 1000, 1, 1)
 
-"""
-Vlist = [0,1,2,3,4,5,6,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-1,0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0]
-Ilist = []
-tlist = [0]
-for V in Vlist:
-    t = tlist[-1] + 0.1
-    tlist.append(t)
-    x.Update(V, t)
-    Ilist.append(x.current)
+def main():
 
-plt.plot(Vlist, Ilist, color="blue")
-plt.show()
-"""
+    x = AFE_FET(1, 7, 10, 1e3, 1e3, 5, 3, 0.1, 1, 1)
 
-TP = 10
-Alist = np.linspace(0, TP, 100)
-Blist = np.linspace(TP, 0, 100)
-Vlist = np.concatenate((Alist, Blist, Alist, Blist, Alist, Blist, Alist, Blist))
-Vlist2 = np.concatenate((Alist, Blist, Alist, Blist))
-#Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0]
-#Vlist = [1,3,2,8,4,6,3,7,3,1]
-Ilist1 = []
-Ilist2 = []
-tlist = [0]
-for V in Vlist:
-    t = tlist[-1] + 0.1
-    tlist.append(t)
-    x.Update(V, t)
-    Ilist1.append(x.current)
+    for tSpike in [0.3, 0.4, 0.8]:
+        x.AddSpike(tSpike)
 
-for V in Vlist:
-    pass
-    t = tlist[-1] + 0.1
-    tlist.append(t)
-    x.Update(V, t)
-    Ilist2.append(x.current)
+    tlist = np.linspace(0,1,100)
+    Ilist = []
+    for t in tlist:
+        Ilist.append(x.Shift(t, 1, 0.1))
+    
+    plt.plot(tlist, Ilist)
+    plt.show()
+    print(x.SpikeTimes)
 
-print(x.SpikeTimes)
 
-#print(Ilist)
-plt.close()
-plt.plot(Vlist, Ilist1, color="red")
-#plt.plot(Vlist, Ilist2, color="blue")
-plt.show()
+    """
+    Vlist = [0,1,2,3,4,5,6,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-1,0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0]
+    Ilist = []
+    tlist = [0]
+    for V in Vlist:
+        t = tlist[-1] + 0.1
+        tlist.append(t)
+        x.Update(V, t)
+        Ilist.append(x.current)
+
+    plt.plot(Vlist, Ilist, color="blue")
+    plt.show()
+    """
+
+    """
+    TP = 10
+    Alist = np.linspace(0, TP, 100)
+    Blist = np.linspace(TP, 0, 100)
+    Vlist = np.concatenate((Alist, Blist))
+    Vlist2 = np.concatenate((Alist, Blist, Alist, Blist))
+    #Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0]
+    #Vlist = [1,3,2,8,4,6,3,7,3,1]
+    Ilist1 = []
+    Ilist2 = []
+    tlist = [0]
+    for V in Vlist:
+        t = tlist[-1] + 0.1
+        tlist.append(t)
+        x.Update(V, t)
+        Ilist1.append(x.current)
+
+    for V in Vlist:
+        t = tlist[-1] + 0.1
+        tlist.append(t)
+        x.Update(V, t)
+        Ilist2.append(x.current)
+
+    print(x.SpikeTimes)
+
+    #print(Ilist)
+    plt.close()
+    plt.plot(Vlist, Ilist1, color="red")
+    plt.plot(Vlist, Ilist2, color="blue")
+    plt.show()
+    """
+
+if __name__ == "__main__":
+    main()
