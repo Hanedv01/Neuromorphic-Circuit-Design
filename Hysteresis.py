@@ -41,12 +41,14 @@ class AFE_FET:
         return slope*V + intersect
     
     # Gives smooth growth between two given points and given slope at V0
-    def Smooth(self, V, V0, V1, I0, I1, slope):
-        a = (-slope*(V0-V1) + I0 - I1)/(V0*V1 - V1**2)
-        b = slope - a*V0
-        c = I0 - a*V0**2 - b*V0
-        return a*V**2 + b*V + c
-    
+    def Smooth(self, V, t, V0, V1, I0, I1, slope):
+        if not V0 == V1:
+            a = (-slope*(V0-V1) + I0 - I1)/(V0*V1 - V1**2)
+            b = slope - a*V0
+            c = I0 - a*V0**2 - b*V0
+            return a*V**2 + b*V + c
+        else:
+            return 
     def AddSpike(self, tSpike):
         self.SpikeTimes = np.append(self.SpikeTimes, tSpike)
 
@@ -56,10 +58,17 @@ class AFE_FET:
             if t >= tSpike:
                 output += delta * np.exp(-(t-tSpike) / tau)
         return output
+    
+    def ShiftNotLast(self, t, delta, tau):
+        output = 0
+        for tSpike in self.SpikeTimes[:-1]:
+            if t >= tSpike:
+                output += delta * np.exp(-(t-tSpike) / tau)
+        return output
 
     # Gives the new current, given past state and new voltage
     def Update(self, Vnew, t):
-        self.Vold = self.voltage
+        Vold = self.voltage
         self.voltage = Vnew
         # Update voltages and currents according to shift
         Vstart = self.Vstart0 + self.Shift(t, self.deltaV, self.tau)
@@ -71,15 +80,17 @@ class AFE_FET:
         UpperLimit = self.Line(Vnew-Vsat, 1/self.Ron, Isat)
         # Corresponding to the baseline through the origin
         if Vnew <= Vstart:
-            if Vnew < self.Vstart0:
-                self.current = self.Line(Vnew, 1/self.Roff, 0)
-            else:
-                self.current = self.Smooth(Vnew, self.Vstart0, Vstart, self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau), 1/self.Roff)
-                print(Vnew,self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau))
-                print(t)
             if self.stateOn:
                     self.stateOn = False
                     self.AddSpike(t)
+            if Vnew <= self.Vstart0:
+                self.current = self.Line(Vnew, 1/self.Roff, 0)
+            # If shifted, connect smoothly between Vstart0 and Vstart
+            else:
+                if Vnew >= Vold:
+                    self.current = self.Smooth(Vnew, t, self.Vstart0, Vstart, self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau), 1/self.Roff)
+                else:
+                    self.current = self.Smooth(Vnew, t, self.Vstart0, self.Vstart0+self.ShiftNotLast(t, self.deltaV, self.tau), self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(self.Vstart0+self.ShiftNotLast(t, self.deltaV, self.tau), 1/self.Roff, 0) + self.ShiftNotLast(t, self.deltaI, self.tau), 1/self.Roff)
         # Correponding to the saturated current after Vsat
         elif Vnew >= Vsat:
             self.current = UpperLimit
@@ -104,10 +115,13 @@ class AFE_FET:
                         
 
 
+# Flytta turn on till ett senare segment
+# Alternativt flytta den till Vstart0 och brute forcea om vi har en switch mellan Vstart0 och Vstart
+
 
 def main():
 
-    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 10000, 1, 1)
+    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 0.2, 0.2)
     """
     for tSpike in [0.3, 0.4, 0.8]:
         x.AddSpike(tSpike)
@@ -136,20 +150,13 @@ def main():
     plt.plot(Vlist, Ilist, color="blue")
     plt.show()
     """
-    Vlist = np.linspace(0,2,200)
-    Ilist = []
-    for V in Vlist:
-        Ilist.append(x.Smooth(V, 0, 2, 0, 1, 0.2))
-
-    #plt.plot(Vlist, Ilist)
-    #plt.show()
     
     TP = 10
     Alist = np.linspace(0, TP, 100)
     Blist = np.linspace(TP, 0, 100)
     Vlist = np.concatenate((Alist, Blist))
     Vlist2 = np.concatenate((Alist, Blist, Alist, Blist))
-    #Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0]
+    #Vlistbad = [0,1,1.2,1.4,1.6,1.8,1.6,1.4,1.2,1,0.9,1,1.2,1.4,1.6,1.8,2,3,4,5,6,7,8,7,6,5,4,3,2,1.8,1.6,1.4,1.2,1,0.9,1,1.2,1.4,1.6,1.8,2,2.1,2,1.8,1.6,1.4,1.2,1,0]
     #Vlist = [1,3,2,8,4,6,3,7,3,1]
     Ilist1 = []
     Ilist2 = []
@@ -166,9 +173,6 @@ def main():
         x.Update(V, t)
         Ilist2.append(x.current)
 
-    #print(Ilist)
-    print(x.SpikeTimes)
-    plt.close()
     plt.plot(Vlist, Ilist1, color="red")
     plt.plot(Vlist, Ilist2, color="blue")
     plt.show()
