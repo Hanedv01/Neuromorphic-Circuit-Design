@@ -1,5 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
+
 
 class AFE_FET:
     current = 0
@@ -7,6 +7,10 @@ class AFE_FET:
     stateOn = False
     SpikeTimes = []
     def __init__(self, Vstart, Vsat, Isat, Roff, Ron, Vhl, Vlh, tau, deltaV, deltaI):
+        """
+        Represents a device with the I-V characteristics of a hysteresis loop. 
+        
+        """
         self.Vstart0 = Vstart
         self.Vsat0 = Vsat
         self.Isat0 = Isat
@@ -25,12 +29,6 @@ class AFE_FET:
         if self.Vlh0 > self.Vsat0:
             raise ValueError("Vlh should be smaller than Vsat!")
 
-    def getSlopeUp(self):
-        return (self.Isat - self.Vhl/self.Roff)/(self.Vsat-self.Vhl)
-    
-    def getSlopeDown(self):
-        return (self.Line(self.Vlh-self.Vsat, 1/self.Ron, self.Isat)-self.Vstart/self.Roff)/(self.Vlh-self.Vstart)
-    
     
     # ------------------------------------------------------------------------------
     #   Functions which define behaviour in different parts of the hysteresis loop
@@ -48,7 +46,7 @@ class AFE_FET:
             c = I0 - a*V0**2 - b*V0
             return a*V**2 + b*V + c
         else:
-            return 
+            raise ValueError("Make sure that V0 and V1 differ!")
     def AddSpike(self, tSpike):
         self.SpikeTimes = np.append(self.SpikeTimes, tSpike)
 
@@ -66,8 +64,11 @@ class AFE_FET:
                 output += delta * np.exp(-(t-tSpike) / tau)
         return output
 
-    # Gives the new current, given past state and new voltage
+
     def Update(self, Vnew, t):
+        """
+        Updates the current, given the past state and new voltage
+        """
         Vold = self.voltage
         self.voltage = Vnew
         # Update voltages and currents according to shift
@@ -120,7 +121,7 @@ class AFE_FET:
 
 
 def main():
-
+    import matplotlib.pyplot as plt
     x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 0.2, 0.2)
     """
     for tSpike in [0.3, 0.4, 0.8]:
