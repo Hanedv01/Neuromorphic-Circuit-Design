@@ -10,10 +10,8 @@ class Resistor:
     def current(self, V):
         return V/self.R
 
-# Behöver sannolikt ha spänning som in- och utdata
 class Capacitor:
     voltage = 0
-    current = 0
     def __init__(self, C):
         """Represents an ideal capacitor."""
         self.C = C
@@ -22,14 +20,31 @@ class Capacitor:
         """Gives the charge on the capacitor."""
         return self.voltage * self.C
     
-    def Update(self, Vnew, dt):
+    def StepUpdate(self, dV):
         """
-        Updates the current through the capacitor, given a voltage.
+        Updates the voltage over the capacitor
         """
-        Vold = self.voltage
-        dV = Vnew-Vold
-        self.current = self.C * dV/dt
-        self.voltage = Vnew
+        self.voltage += dV
+
+class FET:
+    def __init__(self, Vth, lam, K):
+        self.Vth = Vth
+        self.lam = lam
+        self.K = K
+
+    #Based on Shichman-Hodges
+    def GetIds(self, Vgs, Vds):
+        """Returns the current Ids"""
+        if Vds < 0:
+            raise ValueError("Vds should be non-negative!")
+        if Vds <= self.Vth:     # Cut-off region
+            return 0
+        elif 0 < Vds and Vds < Vgs - self.Vth:
+            return self.K * ((Vgs-self.Vth)*Vds - (Vds**2)/2)*(1 + self.lam*Vds)
+        elif 0 < Vgs - self.Vth and Vgs - self.Vth < Vds:
+            return (self.K/2)*((Vgs-self.Vth)**2)*(1 + self.lam*Vds)
+        else:
+            raise ValueError("something is wrong with the arguments!")
 
 
 def main():
@@ -59,39 +74,20 @@ def main():
         dt = T/(N-1)
         tlist = np.linspace(0, T, N)
         Ilist = []
+        Vclist = []
         for t in tlist:
             Vin = VinFunc(t)
             dVc = (Vin-Cap.voltage)*dt / (R*C)
-            Cap.Update(Vin, dt)
-            Ilist.append(C*dVc/dt)
-        plt.plot(tlist, Ilist)
+            Cap.StepUpdate(dVc)
+            Ilist.append(C* dVc/dt)
+            Vclist.append(Cap.voltage)
+        plt.plot(tlist, Vclist)
         plt.show()
-    RC_CircuitCheck(1e-6, 1e6, 1001, 2, Stepfunction)
+    #RC_CircuitCheck(1e-6, 1e6, 1001, 10, Stepfunction)
 
-    """
+    def FETCheck(Vth, l, K):
+        TestFET = FET(1, 0, 1e-4)
 
-    def StepFunction(t):
-        if t > 2:
-            return 1
-        else:
-            return 0
-        
-    Circuit = RC_Circuit(1e3, 1e-9)
-    T = 2.1
-    dt = 0.1
-    N = int(T/dt)
-    tlist = np.linspace(0,T,N)
-    Ilist = []
-    Vlist = []
-    for t in tlist:
-        V = StepFunction(t)
-        Vlist.append(V)
-        Circuit.Update(V, dt)
-        Ilist.append(Circuit.C.current)
-    
-    plt.plot(tlist, Ilist)
-    plt.show()
-    """
 
 
 
