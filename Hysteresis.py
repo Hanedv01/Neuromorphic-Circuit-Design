@@ -34,14 +34,16 @@ class Hysteresis:
         V_HL = self.V_HL + self.decay*self.delta_right + self.decay*self.delta_down*self.R_up
         I_HL = V_HL/self.R_off + self.decay*self.delta_down
         I_sat = self.I_sat + self.decay*self.delta_up + self.decay*self.delta_right/self.R_on
-
         V_sat = V_HL + (I_sat - I_HL) * self.R_up #V_HL + (I_sat - I_HL) * self.R_up
         #I = V/R_on + I_sat - V_sat/R_on = I_start - V_start/R.down + V/R_down
         # V(1/R_on - 1/R_down) = V_sat/R_on - I_sat + I_start - V_start/R_down
         V_LH = (V_sat/self.R_on - I_sat + I_start - V_start/self.R_down)/(1/self.R_on - 1/self.R_down)
         if V <= V_start:
-            self.I = V/self.R_off
-            if self.state == "down" or self.state == "on":
+            if V >= 0:
+                self.I = V/self.R_off + self.decay*self.delta_down*(np.exp(V)-1)/(np.exp(V_start)-1)
+            elif V < 0:
+                self.I = V/self.R_off
+            elif self.state == "down" or self.state == "on":
                 self.decay += 1
                 self.state = "off"
         
@@ -66,28 +68,59 @@ class Hysteresis:
                 self.state = "down"
 
 
-x = Hysteresis(0, 5, 0.1, 0.1, 1, 1, 15, 1, 1, 1, 1, 1e32)
-Vlist = np.append(np.linspace(0,8,100000), np.linspace(8,0,100000))
+x = Hysteresis(0, 5, 0.1, 0.1, 1, 1, 15, 1, 1 , 1, 1, 0.2)
+Vlist = np.append(np.linspace(-3,8,1000), np.linspace(8,-3,1000))
 #Vlist = [-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-3,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-3,-4]
 #Vlist = [0, 5, 10, 2, -3, 1, 3]
 #Vlist = [0,1,2,3,4,5,6,7,8,7,6,5,4,3,4,5,6,7,8,9,10,11,10,9,8,7,6,5,4,3,2,1,0,-1,-2,-3,-4]
 Ilist = []
+
+
 for V in Vlist:
-    x.Update(V, 0.00001)
+    x.Update(V, 0.001)
     Ilist.append(x.I)
 
+for V in Vlist:
+    x.Update(V, 0.001)
+    Ilist.append(x.I)
+
+
+
+
+
 """
-print(Vlist)
+time = np.linspace(0,1.4,1400)
+for V in Vlist:
+    x.Update(V, 0.001)
+    Ilist.append(x.decay)
+for V in Vlist:
+    x.Update(V, 0.001)
+    Ilist.append(x.decay)
+
+for V in Vlist:
+    x.Update(V, 0.001)
+    Ilist.append(x.decay)
+
+for V in Vlist:
+    x.Update(V, 0.001)
+    Ilist.append(x.decay)
+
+for V in Vlist:
+    x.Update(np.zeros_like(V), 0.001)
+    Ilist.append(x.decay)
+for V in Vlist:
+    x.Update(np.zeros_like(V), 0.001)
+    Ilist.append(x.decay)
+for V in Vlist:
+    x.Update(np.zeros_like(V), 0.001)
+    Ilist.append(x.decay)
+
+
 plt.close()
-plt.plot( Vlist, Ilist)
+plt.plot(time, Ilist)
 plt.show()
-
 """
-for V in Vlist:
-    x.Update(V, 1)
-    Ilist.append(x.I)
 
-print(Vlist)
 plt.close()
-plt.plot(np.append(Vlist, Vlist), Ilist)
+plt.plot(np.append(Vlist,Vlist), Ilist)
 plt.show()
