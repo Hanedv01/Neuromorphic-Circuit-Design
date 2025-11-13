@@ -122,7 +122,7 @@ class AFE_FET:
 
 def main():
     import matplotlib.pyplot as plt
-    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 0.2, 0.2)
+    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 1)
     """
     for tSpike in [0.3, 0.4, 0.8]:
         x.AddSpike(tSpike)
@@ -161,21 +161,33 @@ def main():
     #Vlist = [1,3,2,8,4,6,3,7,3,1]
     Ilist1 = []
     Ilist2 = []
+    Ilist3 = []
     tlist = [0]
     for V in Vlist:
         t = tlist[-1] + 0.1
         tlist.append(t)
         x.Update(V, t)
         Ilist1.append(x.current)
+    print(x.SpikeTimes)
 
     for V in Vlist:
         t = tlist[-1] + 0.1
         tlist.append(t)
         x.Update(V, t)
         Ilist2.append(x.current)
+    print(x.SpikeTimes)
+
+    for V in Vlist:
+        t = tlist[-1] + 0.1
+        tlist.append(t)
+        x.Update(V, t)
+        Ilist3.append(x.current)
+    print(x.SpikeTimes)
+    print(t)
 
     plt.plot(Vlist, Ilist1, color="red")
     plt.plot(Vlist, Ilist2, color="blue")
+    plt.plot(Vlist, Ilist3, color="green")
     plt.show()
     
 
