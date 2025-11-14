@@ -138,20 +138,45 @@ plt.plot(time, Ilist)
 plt.show()
 """
 
-def V_GS(hyst_obj_copy, V_mem, I_DS, R_load)_
+def f_V_GS(hyst_obj_copy, V_mem, V_DS):
     hyst_obj_copy.update(V_mem)
     V_hyst = hyst_obj_copy.V
-    V_load = I_DS*R_load
-    return V_hyst - V_load
+    return V_hyst - (V_mem - V_DS)
 
 
-def I_DS(K, V_GS, V_DS, V_th):
+def f_V_DS(K, V_GS, V_mem, V_th, R_load, V_DS):
     if V_GS < V_th:
-        return 0
+        return V_mem
     elif V_DS > 0 and V_DS < V_GS - V_th:
-        return K*((V_GS - V_th)*V_DS - V_DS**2/2)
+        return 
     elif V_DS > V_GS - V_th and V_GS - V_th > 0:
-        return (K/2)*(V_GS - V_th)**2
-    
-def V_DS(V_mem, I_DS, R_load):
-    return V_mem - I_DS*R_load
+        return V_mem - R_load*(K/2)*(V_GS - V_th)**2
+    else:
+        print("V_DS = ", V_DS)
+
+def Delta_V_mem(dt, V_in, V_mem, C_mem, R_in, R_load, V_DS):
+    return dt*((V_in - V_mem)/(C_mem*R_in) - (V_mem-V_DS)/(C_mem*R_load))
+
+Vlist = np.append(np.linspace(0,10,1000), np.linspace(10,0,1000))
+R_in = 10
+R_load = 10
+C_mem = 10e-12
+Device = Hysteresis(2, 5, 0.1, 0.1, 1, 1, 15, 0, 0 , 0, 0, 1e32)
+V_mem = 0
+V_DS = 0
+V_GS = 0
+V_th = 8
+dt = 1
+
+
+V_mem_list = [0]
+V_DS_list = [0]
+for V in Vlist:
+    V_mem += Delta_V_mem(dt, V, V_mem, C_mem, R_in, R_load, V_DS)
+    V_DS = f_V_DS(K, V_GS, V_mem, V_th, R_load, V_DS):
+    V_GS = f_V_GS(Device, V_mem, V_DS)
+    V_mem_list.append(V_mem)
+    V_DS_list.append(V_DS)
+
+print("V_mem: ", V_mem_list)
+print("V_DS: ", V_DS_list)
