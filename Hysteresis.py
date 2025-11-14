@@ -151,7 +151,24 @@ def main():
     plt.plot(Vlist, Ilist, color="blue")
     plt.show()
     """
-    
+    def smallTest():
+        A = AFE_FET(0,1,1,1e3,1e3,1,0,1000, 0,0)
+        TP = 1.3
+        Alist = np.linspace(0, TP, 100)
+        Blist = np.linspace(TP, 0, 100)
+        Vlist = np.concatenate((Alist, Blist))
+        Ilist = []
+        tlist = [0]
+        for V in Vlist:
+            t = tlist[-1] + 0.1
+            tlist.append(t)
+            A.Update(V, t)
+            Ilist.append(A.current)
+        plt.plot(Vlist, Ilist)
+        plt.show()
+    smallTest()
+
+    """
     TP = 10
     Alist = np.linspace(0, TP, 100)
     Blist = np.linspace(TP, 0, 100)
@@ -189,6 +206,7 @@ def main():
     plt.plot(Vlist, Ilist2, color="blue")
     plt.plot(Vlist, Ilist3, color="green")
     plt.show()
+    """
     
 
 if __name__ == "__main__":

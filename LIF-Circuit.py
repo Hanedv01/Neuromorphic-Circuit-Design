@@ -37,12 +37,13 @@ class FET:
     def GetIds(self, Vgs, Vds):
         """Returns the current Ids"""
         if Vds < 0:
-            raise ValueError("Vds should be non-negative!")
-        if Vgs <= self.Vth:     # Cut-off region
             return 0
-        elif 0 <= Vds and Vds <= Vgs - self.Vth:    # Linear region
+            #raise ValueError("Vds should be non-negative!")
+        if Vgs <= self.Vth:                                             # Cut-off region
+            return 0
+        elif 0 <= Vds and Vds <= Vgs - self.Vth:                        # Linear region
             return self.K * ((Vgs-self.Vth)*Vds - (Vds**2)/2)*(1 + self.lam*Vds)
-        elif 0 <= Vgs - self.Vth and Vgs - self.Vth <= Vds:     # Saturated region
+        elif 0 <= Vgs - self.Vth and Vgs - self.Vth <= Vds:             # Saturated region
             return (self.K/2)*((Vgs-self.Vth)**2)*(1 + self.lam*Vds)
         else:
             raise ValueError(f"Something is wrong with the arguments! Vgs={Vgs}V, Vds={Vds}V")
@@ -71,28 +72,51 @@ class LIF_Circuit:
     Vout = 0
 
     def SolveRecursiveIds(self, Vout, Vmem):
+        def FET_SignFixer(Ids):
+            """
+            Swaps source and drain if Vds < 0
+            """
+            Vd = Vmem
+            Vs = Ids*self.Rd
+            Vg = Vout
+            Vds = Vd - Vs
+            print(Vds)
+            if Vds >= 0:    # If everything is as it should be
+                Vgs = Vg - Vs
+                return self.MOSFET.GetIds(Vgs, Vds)
+            else:           # If the formula for Ids would get a negative argument
+                Vgd = Vg - Vd
+                Vsd = Vs - Vd
+                Isd = self.MOSFET.GetIds(Vgd, Vsd)
+                return -Isd
+        def Ids_optionB(Ids):
+            Vgs = self.Vout - self.Vmem
+            Vds = Ids*self.Rd - self.Vmem
+            #print(f"Vds = {Vds}")
+            return self.MOSFET.GetIds(Vgs,Vds)
+            
         def residual(Ids):
-            Vgs = Vout - Vmem
-            Vds = Vmem - Ids*self.Rd
-            print(Vgs, Vds)
-            print(self.MOSFET.GetIds(Vgs, Vds))
-            return Ids - self.MOSFET.GetIds(Vgs, Vds)
+            return Ids - Ids_optionB(Ids)
+            #return Ids - FET_SignFixer(Ids)
         
-        Imin, Imax = 0, 10
-        sol = root_scalar(residual, bracket=[Imin, Imax], method='brentq')
+        Imax = Vmem/self.Rd
+        print(f"Imax = {Imax}")
+        Ilow, Ihigh = -Imax, Imax
+        sol = root_scalar(residual, bracket=[Ilow,Ihigh], method='brentq')
 
         if not sol.converged:
-            raise RuntimeError("Self-consistent Ids solution did not converge.")
+            raise RuntimeError("Ids solution did not converge.")
         return sol.root
     
     def Step(self, t, dt, Vin):
+        Ids = self.SolveRecursiveIds(self.Vout, self.Vmem)
+        print(f"Ids = {Ids}")
+        dVmem = ((Vin-self.Vmem)/(self.Rin*self.C) - Ids/self.C)*dt
+        self.Vmem += dVmem
         self.HystComp.Update(self.Vmem, t)
         self.Vout = self.HystComp.current
-        print(self.Vout)
-        print(self.Vmem)
-        Ids = self.SolveRecursiveIds(self.Vout, self.Vmem)
-        dVmem = ((Vin-self.Vmem)/(self.Rin*self.C) + Ids/self.C)*dt
-        self.Vmem += dVmem
+        print(f"Vout = {self.Vout}")
+        print(f"Vmem = {self.Vmem}")
 
 
 
@@ -105,19 +129,25 @@ def main():
         
     def CircuitTest(T, N):
         MOSFET = FET(1,0,1e-4)
-        HystDevice = AFE_FET(1,8,10,1e3,1e3,2,7,100,1,1)
-        Circuit = LIF_Circuit(1e3, 1e3, 1e-12, HystDevice, MOSFET)
-        print(Circuit.SolveRecursiveIds(0,0))
+        Vstart = 0
+        Vsat = 0.9
+        Isat = 2.5
+        Vhl = 0.9
+        Vlh = 0
+        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,100,0,0)
+        Circuit = LIF_Circuit(1e3, 1e3, 1e-3, HystDevice, MOSFET)
+        #print(Circuit.SolveRecursiveIds(0,0))
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
         Ilist = []
         for t in tlist:
             Circuit.Step(t, dt, Stepfunction(t))
+            print(t)
             Ilist.append(Circuit.Vout)
         plt.plot(tlist, Ilist)
         plt.show()
         
-    CircuitTest(10, 501)
+    CircuitTest(10, 1001)
 
     def CapacitorCheck(C, N, T, VinFunc):
         C1 = Capacitor(C)
