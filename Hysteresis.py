@@ -6,7 +6,7 @@ class AFE_FET:
     voltage = 0
     stateOn = False
     SpikeTimes = []
-    def __init__(self, Vstart, Vsat, Isat, Roff, Ron, Vhl, Vlh, tau, deltaV, deltaI):
+    def __init__(self, Vstart, Vsat, Isat, Roff, Ron, Vhl, Vlh, tau, deltaVon, deltaVoff, deltaI):
         """
         Represents a device with the I-V characteristics of a hysteresis loop. 
         
@@ -19,7 +19,8 @@ class AFE_FET:
         self.Vhl0 = Vhl
         self.Vlh0 = Vlh
         self.tau = tau
-        self.deltaV = deltaV
+        self.deltaVon = deltaVon
+        self.deltaVoff = deltaVoff
         self.deltaI = deltaI
 
         if self.Vstart0 > self.Vhl0:
@@ -39,7 +40,7 @@ class AFE_FET:
         return slope*V + intersect
     
     # Gives smooth growth between two given points and given slope at V0
-    def Smooth(self, V, t, V0, V1, I0, I1, slope):
+    def Smooth(self, V, V0, V1, I0, I1, slope):
         if not V0 == V1:
             a = (-slope*(V0-V1) + I0 - I1)/(V0*V1 - V1**2)
             b = slope - a*V0
@@ -72,11 +73,11 @@ class AFE_FET:
         Vold = self.voltage
         self.voltage = Vnew
         # Update voltages and currents according to shift
-        Vstart = self.Vstart0 + self.Shift(t, self.deltaV, self.tau)
-        Vsat   = self.Vsat0   + self.Shift(t, self.deltaV, self.tau)
+        Vstart = self.Vstart0 + self.Shift(t, self.deltaVoff, self.tau)
+        Vsat   = self.Vsat0   + self.Shift(t, self.deltaVon, self.tau)
         Isat   = self.Isat0   + self.Shift(t, self.deltaI, self.tau)
-        Vhl    = self.Vhl0    + self.Shift(t, self.deltaV, self.tau)
-        Vlh    = self.Vlh0    + self.Shift(t, self.deltaV, self.tau)
+        Vhl    = self.Vhl0    + self.Shift(t, self.deltaVon, self.tau)
+        Vlh    = self.Vlh0    + self.Shift(t, self.deltaVoff, self.tau)
         # Create an upper current ceiling
         UpperLimit = self.Line(Vnew-Vsat, 1/self.Ron, Isat)
         # Corresponding to the baseline through the origin
@@ -89,9 +90,9 @@ class AFE_FET:
             # If shifted, connect smoothly between Vstart0 and Vstart
             else:
                 if Vnew >= Vold:
-                    self.current = self.Smooth(Vnew, t, self.Vstart0, Vstart, self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau), 1/self.Roff)
+                    self.current = self.Smooth(Vnew, self.Vstart0, Vstart, self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(Vstart, 1/self.Roff, 0) + self.Shift(t, self.deltaI, self.tau), 1/self.Roff)
                 else:
-                    self.current = self.Smooth(Vnew, t, self.Vstart0, self.Vstart0+self.ShiftNotLast(t, self.deltaV, self.tau), self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(self.Vstart0+self.ShiftNotLast(t, self.deltaV, self.tau), 1/self.Roff, 0) + self.ShiftNotLast(t, self.deltaI, self.tau), 1/self.Roff)
+                    self.current = self.Smooth(Vnew, self.Vstart0, self.Vstart0+self.ShiftNotLast(t, self.deltaVoff, self.tau), self.Line(self.Vstart0, 1/self.Roff, 0), self.Line(self.Vstart0+self.ShiftNotLast(t, self.deltaVoff, self.tau), 1/self.Roff, 0) + self.ShiftNotLast(t, self.deltaI, self.tau), 1/self.Roff)
         # Correponding to the saturated current after Vsat
         elif Vnew >= Vsat:
             self.current = UpperLimit
@@ -122,7 +123,7 @@ class AFE_FET:
 
 def main():
     import matplotlib.pyplot as plt
-    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 1)
+    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 0, 0)
     """
     for tSpike in [0.3, 0.4, 0.8]:
         x.AddSpike(tSpike)
@@ -150,6 +151,7 @@ def main():
 
     plt.plot(Vlist, Ilist, color="blue")
     plt.show()
+    """
     """
     def smallTest():
         A = AFE_FET(0,1,1,1e3,1e3,1,0,1000, 0,0)
@@ -206,7 +208,7 @@ def main():
     plt.plot(Vlist, Ilist2, color="blue")
     plt.plot(Vlist, Ilist3, color="green")
     plt.show()
-    """
+
     
 
 if __name__ == "__main__":

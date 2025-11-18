@@ -38,7 +38,7 @@ class FET:
         """Returns the current Ids"""
         if Vds < 0:
             #return 0
-            raise ValueError("Vds should be non-negative!")
+            raise ValueError(f"Vds should be non-negative! It is {Vds}")
         if Vgs <= self.Vth:                                             # Cut-off region
             return 0
         elif 0 <= Vds and Vds <= Vgs - self.Vth:                        # Linear region
@@ -129,27 +129,27 @@ class LIF_Circuit:
         #print(f"Vs = {Ids*self.Rd}")
         #print(f"Vds = {self.Vmem - Ids*self.Rd}")
         #print(f"Vgs = {self.Vout - Ids*self.Rd}")
-        print(f"Ids = {Ids}")
+        #print(f"Ids = {Ids}")
         return Ids
 
 
 
 def main():
     def Stepfunction(t):
-        if t >= 1:
+        if t >= 1e-1:
             return 1
         else:
             return 0
         
     def CircuitTest(T, N):
-        MOSFET = FET(1,0,1e-1)
-        Vstart = 0.6
-        Vsat = 0.95
-        Isat = 2
-        Vhl = 0.95
-        Vlh = 0.6
-        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,100,0,0)
-        Circuit = LIF_Circuit(1e3, 1e3, 1e-3, HystDevice, MOSFET)
+        MOSFET = FET(0.6,0,1e-7)
+        Vstart = 0.3
+        Vsat = 0.6
+        Isat = 1
+        Vhl = 0.6
+        Vlh = 0.3
+        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1,0.1,0.03,0)
+        Circuit = LIF_Circuit(1e8, 1e1, 1e-9, HystDevice, MOSFET)
         #print(Circuit.SolveRecursiveIds(0,0))
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
@@ -159,19 +159,21 @@ def main():
         Vdslist  = []
         for t in tlist:
             Vdslist.append(Circuit.Vmem - Circuit.Rd*Circuit.Step(t, dt, Stepfunction(t)))
-            print(t)
+            #print(t)
             Vinlist.append(Stepfunction(t))
             Voutlist.append(Circuit.Vout)
             Vmemlist.append(Circuit.Vmem)
         plt.plot(tlist, Vinlist,  label="Vin")
         plt.plot(tlist, Voutlist, label="Vout")
         plt.plot(tlist, Vmemlist, label="Vmem")
-        plt.plot(tlist, Vdslist,  label="Ids")
+        #plt.plot(tlist, Vdslist,  label="Ids")
+        plt.xlabel("t [s]")
+        plt.ylabel("V [V]")
         plt.legend()
         plt.show()
 
         
-    CircuitTest(9, 1001)
+    CircuitTest(1.6, 40001)
 
     def CapacitorCheck(C, N, T, VinFunc):
         C1 = Capacitor(C)
