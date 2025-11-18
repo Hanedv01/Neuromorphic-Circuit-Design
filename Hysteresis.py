@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy.optimize import fsolve
+import copy
 
 
 class Hysteresis:
-    def __init__(self, V_start, V_HL, R_down, R_up, R_off, R_on, I_sat, delta_down, delta_up, delta_right, delta_left, tau, k = 3):
+    def __init__(self, V_start, V_HL, R_down, R_up, R_off, R_on, I_sat, delta_down, delta_up, delta_right, delta_left, tau, k = 10):
         # Store parameters
         self.V_start = V_start #where the left side meets the off state
         self.V_HL = V_HL #Default threshold voltage
@@ -12,8 +13,8 @@ class Hysteresis:
         self.R_off = R_off #resistance on bottom side
         self.R_on = R_on #resistance on top side
         self.R_down = R_down #resistance on left side
-        self.V = 0 #Voltage at this time step
-        self.I = 0 #current at this time step
+        self.V = 0.0 #Voltage at this time step
+        self.I = 0.0 #current at this time step
         self.state = "off" #which of the four states the Neuron is in
         self.I_sat = I_sat #default saturation current
         self.delta_down = delta_down #pushing the bottom upwards (changes off current)
@@ -30,7 +31,7 @@ class Hysteresis:
         self.V = V
         self.I_old = self.I
         self.decay = self.decay*np.exp(-1*dt/self.tau)
-        V_start = self.V_start + self.decay*self.delta_left + self.decay*self.delta_down*self.R_down
+        self.current_V_start = self.V_start + self.decay*self.delta_left + self.decay*self.delta_down*self.R_down
         I_start = (self.V_start + self.decay*self.delta_left)/self.R_off + self.decay*self.delta_down
         V_HL = self.V_HL + self.decay*self.delta_right + self.decay*self.delta_down*self.R_up
         I_HL = V_HL/self.R_off + self.decay*self.delta_down
@@ -38,25 +39,27 @@ class Hysteresis:
         V_sat = V_HL + (I_sat - I_HL) * self.R_up #V_HL + (I_sat - I_HL) * self.R_up
         #I = V/R_on + I_sat - V_sat/R_on = I_start - V_start/R.down + V/R_down
         # V(1/R_on - 1/R_down) = V_sat/R_on - I_sat + I_start - V_start/R_down
-        V_LH = (V_sat/self.R_on - I_sat + I_start - V_start/self.R_down)/(1/self.R_on - 1/self.R_down)
-        if V <= V_start:
-            if (self.state == "down" or self.state == "on") and V <= self.V_start:
+        V_LH = (V_sat/self.R_on - I_sat + I_start - self.current_V_start/self.R_down)/(1/self.R_on - 1/self.R_down)
+        if V <= self.current_V_start:
+            if (self.state == "down" or self.state == "on"):
                 self.decay += 1
-                print(V)
                 self.state = "off"
+                print("Decay added, current decay: ", self.decay)
             if V >= self.V_start:
-                self.I = V/self.R_off + (I_start-V/self.R_off)*(np.exp(self.k*(V-self.V_start))-1)/(np.exp(self.k*(V_start-self.V_start))-1)
+            #    self.I = V/self.R_off + (I_start-V/self.R_off)*(np.exp(self.k*(V-self.V_start))-1)/(np.exp(self.k*(self.current_V_start-self.V_start))-1)
+                self.I = self.I = V/self.R_off
             elif V < self.V_start:
                 self.I = V/self.R_off
         
         elif self.state == "off" or self.state == "up":
             if V < V_HL:        #check if smaller than V_HL
-                self.I = I_start + (V-V_start)/self.R_off #decay after V_start
+                self.I = I_start + (V-self.current_V_start)/self.R_off #decay after V_start
                 self.state = "off"
             else:                       #V is bigger or equal to V_HL
                 if V > V_sat: #check if V saturates current
                     self.I = I_sat + (V-V_sat)/self.R_on #propogate the on state
                     self.state = "on" #state is "on"
+                    print("state, V_sat, decay: ", self.state, V_sat, self.decay)
                 else:
                     self.I = V_HL/self.R_off + self.decay*self.delta_down + (V-V_HL)/self.R_up #current up to V_HL and then state change up to V
                     self.state = "up" #state is up but not fully saturated
@@ -66,8 +69,9 @@ class Hysteresis:
                 self.I = I_sat + (V-V_sat)/self.R_on
                 self.state = "on"
             else:
-                self.I = I_start + (V-V_start)/self.R_down
+                self.I = I_start + (V-self.current_V_start)/self.R_down
                 self.state = "down"
+                print("state, V_sat, decay: ", self.state, V_sat, self.decay)
 
 
 """
@@ -138,45 +142,123 @@ plt.plot(time, Ilist)
 plt.show()
 """
 
-def f_V_GS(hyst_obj_copy, V_mem, V_DS):
-    hyst_obj_copy.update(V_mem)
-    V_hyst = hyst_obj_copy.V
-    return V_hyst - (V_mem - V_DS)
+
+Vlist = np.append(np.linspace(0,10,1600), np.linspace(10,0,1600))
+tlist = np.linspace(0,10,6400)
+Device = Hysteresis(0.1, 7, 1e-6, 1e-6, 100, 100, 1, 1, 1 , 0, 1, 1e32)
+dt = tlist[1] - tlist[0]
+
+Ilist = []
+for n in range(3):
+    Ilist = []
+    for i in range(len(Vlist)):
+        V = Vlist[i]
+        Device.Update(V, dt)
+        Ilist.append(Device.I)
+    plt.plot(Vlist,Ilist)
+
+plt.xlabel("Voltage [V]")
+plt.ylabel("Current [A]")
+plt.show()
+
+"""
+def f_V_GS(hyst_obj_copy, V_mem, V_DS, dt):
+    hyst_obj_copy.Update(V_mem, dt)
+    V_hyst = hyst_obj_copy.I
+    if np.isnan(V_hyst):
+        V_hyst = 0.0
+
+    D_V = (V_mem - V_DS)
+    if np.isnan(D_V):
+        D_V = 0.0
+    return V_hyst - D_V
 
 
 def f_V_DS(K, V_GS, V_mem, V_th, R_load, V_DS):
     if V_GS < V_th:
-        return V_mem
+        return V_DS - V_mem
     elif V_DS > 0 and V_DS < V_GS - V_th:
-        return 
+        expr = V_mem - R_load*K*((V_GS - V_th)*V_DS - V_DS**2/2)
+        return V_DS - expr
     elif V_DS > V_GS - V_th and V_GS - V_th > 0:
-        return V_mem - R_load*(K/2)*(V_GS - V_th)**2
-    else:
-        print("V_DS = ", V_DS)
+        expr = V_mem - R_load*(K/2)*(V_GS - V_th)**2
+        return V_DS - expr
+    return V_DS - V_mem
 
 def Delta_V_mem(dt, V_in, V_mem, C_mem, R_in, R_load, V_DS):
     return dt*((V_in - V_mem)/(C_mem*R_in) - (V_mem-V_DS)/(C_mem*R_load))
 
-Vlist = np.append(np.linspace(0,10,1000), np.linspace(10,0,1000))
-R_in = 10
+def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt):
+    V_GS, V_DS, V_mem_new = x
+
+    # 1. Hysteresis relation
+    hyst_obj_copy = copy.deepcopy(hyst_obj)   # Make a temporary copy
+    f1 = f_V_GS(hyst_obj_copy, V_mem_old, V_DS, dt) - V_GS
+
+    # 2. MOSFET DS equation
+    f2 = f_V_DS(K, V_GS, V_mem_old, V_th, R_load, V_DS)
+
+    # 3. Membrane capacitor update
+    f3 = V_mem_new - (V_mem_old + Delta_V_mem(dt, V_in, V_mem_old, C_mem, R_in, R_load, V_DS))
+
+    return [f1, f2, f3]
+
+
+
+Vlist = np.ones(3200)*3
+Vlist = np.append(Vlist, np.zeros_like(Vlist))
+tlist = np.linspace(0,20,6400)
+R_in = 1e3
 R_load = 10
-C_mem = 10e-12
-Device = Hysteresis(2, 5, 0.1, 0.1, 1, 1, 15, 0, 0 , 0, 0, 1e32)
+C_mem = 1e-3
+Device = Hysteresis(0.1, 1, 1e-6, 1e-6, 100, 100, 1.5, 0, 0 , 0.3, 0.3, 1e32)
 V_mem = 0
 V_DS = 0
 V_GS = 0
-V_th = 8
-dt = 1
+V_th = 1.11
+K = 1
+dt = tlist[1] - tlist[0]
 
+V_mem_list = []
+V_DS_list = []
+V_GS_list = []
+V_out_list = []
 
-V_mem_list = [0]
-V_DS_list = [0]
-for V in Vlist:
-    V_mem += Delta_V_mem(dt, V, V_mem, C_mem, R_in, R_load, V_DS)
-    V_DS = f_V_DS(K, V_GS, V_mem, V_th, R_load, V_DS):
-    V_GS = f_V_GS(Device, V_mem, V_DS)
-    V_mem_list.append(V_mem)
+for i in range(len(tlist)):
+    V_in = Vlist[i]
+
+    # initial guess
+    x0 = [V_GS, V_DS, V_mem]
+
+    sol = fsolve(
+        equations, 
+        x0,
+        args=(Device, V_in, V_mem, V_th, R_load, R_in, C_mem, K, dt)
+    )
+
+    V_GS, V_DS, V_mem = sol
+    Device.Update(V_mem, dt)
+    #V_mem = max(V_mem, 0)
+    V_DS = max(V_DS, 0)
+    V_GS = max(V_GS, 0)
+    V_out = Device.I
+    V_GS_list.append(V_GS)
     V_DS_list.append(V_DS)
+    V_mem_list.append(V_mem)
+    V_out_list.append(V_out)
+    #print("V_GS - V_th: ", V_GS - V_th)
+    #print("V_DS: ", V_DS)
+        
 
-print("V_mem: ", V_mem_list)
-print("V_DS: ", V_DS_list)
+
+plt.figure()
+plt.plot(tlist,Vlist, label = "V_in", color = "k")
+plt.plot(tlist, V_mem_list, label = "V_mem", color = "r")
+#plt.plot(tlist, V_DS_list, label = "V_DS")
+#plt.plot(tlist, V_GS_list, label = "V_GS")
+plt.plot(tlist, V_out_list, label = "V_out", color = "b")
+plt.xlabel("Time [s]")
+plt.ylabel("Voltage [V]")
+plt.legend()
+plt.show()
+"""
