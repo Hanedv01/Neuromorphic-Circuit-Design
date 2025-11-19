@@ -142,14 +142,14 @@ def main():
             return 0
         
     def CircuitTest(T, N):
-        MOSFET = FET(0.6,0,1e-7)
+        MOSFET = FET(0.6,0,1e-6)
         Vstart = 0.3
         Vsat = 0.6
         Isat = 1
         Vhl = 0.6
         Vlh = 0.3
-        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1,0.1,0.03,0)
-        Circuit = LIF_Circuit(1e8, 1e1, 1e-9, HystDevice, MOSFET)
+        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0.1,0.03,0)
+        Circuit = LIF_Circuit(1e7, 1e1, 1e-9, HystDevice, MOSFET)
         #print(Circuit.SolveRecursiveIds(0,0))
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
@@ -173,7 +173,7 @@ def main():
         plt.show()
 
         
-    CircuitTest(1.6, 40001)
+    CircuitTest(0.5, 40001)
 
     def CapacitorCheck(C, N, T, VinFunc):
         C1 = Capacitor(C)
