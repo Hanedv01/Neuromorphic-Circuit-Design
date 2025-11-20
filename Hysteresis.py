@@ -209,11 +209,11 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt):
 
 Vlist = np.ones(6400)*1
 Vlist = np.append(Vlist, Vlist)
-tlist = np.linspace(0,.1,12800)
+tlist = np.linspace(0,.0010,12800)
 R_in = 1e7
-R_load = 0.1
+R_load = 100
 C_mem = 1e-9
-Device = Hysteresis(0.1, 0.55, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
+Device = Hysteresis(0.1, 0.1001, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
 V_mem = 0
 V_DS = 0
 V_GS = 0
@@ -256,8 +256,6 @@ for i in range(len(tlist)):
     #if t > 0.1339 and t < 0.1374:
     #    print("V_GS, V_G, V_mem - V_DS", V_GS, V_out, V_mem - V_DS)
         
-
-
 plt.figure()
 plt.plot(tlist,Vlist, label = "V_in", color = "k")
 plt.plot(tlist, V_mem_list, label = "V_mem", color = "r")
