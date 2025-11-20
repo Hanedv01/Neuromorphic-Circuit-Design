@@ -44,7 +44,6 @@ class Hysteresis:
             if (self.state == "down" or self.state == "on"):
                 self.decay += 1
                 self.state = "off"
-                print("Decay added, current decay: ", self.decay)
             if V >= self.V_start:
             #    self.I = V/self.R_off + (I_start-V/self.R_off)*(np.exp(self.k*(V-self.V_start))-1)/(np.exp(self.k*(self.current_V_start-self.V_start))-1)
                 self.I = self.I = V/self.R_off
@@ -59,7 +58,6 @@ class Hysteresis:
                 if V > V_sat: #check if V saturates current
                     self.I = I_sat + (V-V_sat)/self.R_on #propogate the on state
                     self.state = "on" #state is "on"
-                    print("state, V_sat, decay: ", self.state, V_sat, self.decay)
                 else:
                     self.I = V_HL/self.R_off + self.decay*self.delta_down + (V-V_HL)/self.R_up #current up to V_HL and then state change up to V
                     self.state = "up" #state is up but not fully saturated
@@ -71,7 +69,6 @@ class Hysteresis:
             else:
                 self.I = I_start + (V-self.current_V_start)/self.R_down
                 self.state = "down"
-                print("state, V_sat, decay: ", self.state, V_sat, self.decay)
 
 
 """
@@ -142,7 +139,7 @@ plt.plot(time, Ilist)
 plt.show()
 """
 
-
+"""
 Vlist = np.append(np.linspace(0,10,1600), np.linspace(10,0,1600))
 tlist = np.linspace(0,10,6400)
 Device = Hysteresis(0.1, 7, 1e-6, 1e-6, 100, 100, 1, 1, 1 , 0, 1, 1e32)
@@ -160,17 +157,22 @@ for n in range(3):
 plt.xlabel("Voltage [V]")
 plt.ylabel("Current [A]")
 plt.show()
-
 """
+
+
 def f_V_GS(hyst_obj_copy, V_mem, V_DS, dt):
     hyst_obj_copy.Update(V_mem, dt)
     V_hyst = hyst_obj_copy.I
     if np.isnan(V_hyst):
         V_hyst = 0.0
+    V_hyst = max(V_hyst, 0)
 
     D_V = (V_mem - V_DS)
     if np.isnan(D_V):
         D_V = 0.0
+    #if D_V < -1e-3:
+    #    print(V_hyst, D_V)
+    D_V = max(D_V, 0)
     return V_hyst - D_V
 
 
@@ -205,18 +207,18 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt):
 
 
 
-Vlist = np.ones(3200)*3
-Vlist = np.append(Vlist, np.zeros_like(Vlist))
-tlist = np.linspace(0,20,6400)
-R_in = 1e3
-R_load = 10
-C_mem = 1e-3
-Device = Hysteresis(0.1, 1, 1e-6, 1e-6, 100, 100, 1.5, 0, 0 , 0.3, 0.3, 1e32)
+Vlist = np.ones(6400)*1
+Vlist = np.append(Vlist, Vlist)
+tlist = np.linspace(0,.1,12800)
+R_in = 1e7
+R_load = 0.1
+C_mem = 1e-9
+Device = Hysteresis(0.1, 0.55, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
 V_mem = 0
 V_DS = 0
 V_GS = 0
-V_th = 1.11
-K = 1
+V_th = 0.7
+K = 1e-4
 dt = tlist[1] - tlist[0]
 
 V_mem_list = []
@@ -237,28 +239,32 @@ for i in range(len(tlist)):
     )
 
     V_GS, V_DS, V_mem = sol
+    V_mem = max(V_mem, 0)
+    #V_DS = max(V_DS, 0)
+    #V_GS = max(V_GS, 0)
     Device.Update(V_mem, dt)
-    #V_mem = max(V_mem, 0)
-    V_DS = max(V_DS, 0)
-    V_GS = max(V_GS, 0)
     V_out = Device.I
+    V_out = max(V_out, 0)
+    
     V_GS_list.append(V_GS)
     V_DS_list.append(V_DS)
     V_mem_list.append(V_mem)
     V_out_list.append(V_out)
     #print("V_GS - V_th: ", V_GS - V_th)
     #print("V_DS: ", V_DS)
+    t = tlist[i]
+    #if t > 0.1339 and t < 0.1374:
+    #    print("V_GS, V_G, V_mem - V_DS", V_GS, V_out, V_mem - V_DS)
         
 
 
 plt.figure()
 plt.plot(tlist,Vlist, label = "V_in", color = "k")
 plt.plot(tlist, V_mem_list, label = "V_mem", color = "r")
-#plt.plot(tlist, V_DS_list, label = "V_DS")
-#plt.plot(tlist, V_GS_list, label = "V_GS")
+plt.plot(tlist, V_DS_list, label = "V_DS")
+plt.plot(tlist, V_GS_list, label = "V_GS")
 plt.plot(tlist, V_out_list, label = "V_out", color = "b")
 plt.xlabel("Time [s]")
 plt.ylabel("Voltage [V]")
 plt.legend()
 plt.show()
-"""
