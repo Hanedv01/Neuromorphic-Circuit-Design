@@ -50,7 +50,7 @@ class FET:
         
     
 class LIF_Circuit:
-    def __init__(self, Rin, Rd, C, HystComp, MOSFET):
+    def __init__(self, Rin, Rl, Rd, C, HystComp, MOSFET):
         """
         Components:
         -------------------
@@ -64,6 +64,7 @@ class LIF_Circuit:
         """
         self.Rin = Rin
         self.C = C
+        self.Rl = Rl
         self.Rd = Rd
         self.HystComp = HystComp
         self.MOSFET = MOSFET
@@ -123,7 +124,7 @@ class LIF_Circuit:
         return sol.root
     
     def Step(self, t, dt, Vin):
-        def WidthUpdate(t, Vout):
+        def WidthUpdate(t):
             if self.isInSpike == False and self.Vout >= self.HystComp.Isat0:
                 self.isInSpike = True
                 self.timeBetweenSpikes.append(t - self.t_temp)
@@ -135,11 +136,14 @@ class LIF_Circuit:
 
         Ids = self.SolveRecursiveIds(self.Vout, self.Vmem)
         #print(f"Ids = {Ids}")
-        dVmem = ((Vin-self.Vmem)/(self.Rin*self.C) - Ids/self.C)*dt
+        if Vin < self.Vmem:
+            dVmem = (-Ids/self.C - self.Vmem/self.Rl)*dt
+        else:
+            dVmem = ((Vin-self.Vmem)/(self.Rin*self.C) - self.Vmem/self.Rl - Ids/self.C)*dt
         self.Vmem += dVmem
         self.HystComp.Update(self.Vmem, t)
         self.Vout = self.HystComp.current
-        WidthUpdate(t, self.Vout)
+        WidthUpdate(t)
         #print(f"Vout = {self.Vout}")
         #print(f"Vmem = {self.Vmem}")
         #print(f"Vs = {Ids*self.Rd}")
@@ -157,15 +161,22 @@ def main():
         else:
             return 0
         
+    def SpikeTrain(t, tSpike, tPause):
+        tTot = tSpike + tPause
+        if t%tTot < tPause:
+            return 0
+        else:
+            return 1
+        
     def CircuitTest(T, N, plot=False):
-        MOSFET = FET(0.6,0,1e-6)
+        MOSFET = FET(0.6,0,1e-4)
         Vstart = 0.3
         Vsat = 0.6
         Isat = 1
         Vhl = 0.6
         Vlh = 0.3
         HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
-        Circuit = LIF_Circuit(1e7, 1e1, 1e-14, HystDevice, MOSFET)
+        Circuit = LIF_Circuit(5e5, 1e12, 1e1, 1e-12, HystDevice, MOSFET)
         #print(Circuit.SolveRecursiveIds(0,0))
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
@@ -174,15 +185,14 @@ def main():
         Vmemlist = []
         Vdslist  = []
         for t in tlist:
-            Vdslist.append(Circuit.Vmem - Circuit.Rd*Circuit.Step(t, dt, Stepfunction(t)))
+            #Vdslist.append(Circuit.Vmem - Circuit.Rd*Circuit.Step(t, dt, Stepfunction(t)))
             #print(t)
-            Vinlist.append(Stepfunction(t))
+            #Vinlist.append(Stepfunction(t))
+            Circuit.Step(t, dt, SpikeTrain(t, 1.57e-7, 5.6e-8))
+            Vinlist.append(SpikeTrain(t, 1.57e-7, 5.6e-8))
             Voutlist.append(Circuit.Vout)
             Vmemlist.append(Circuit.Vmem)
 
-        print(f"Width of spikes: {Circuit.spikeWidths}")
-        print("")
-        print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
         
         if plot:
             plt.plot(tlist, Vinlist,  label="Vin")
@@ -193,7 +203,14 @@ def main():
             plt.ylabel("V [V]")
             plt.legend()
             plt.show()
-    CircuitTest(0.000001, 40001, plot = True)
+
+        print(f"Width of spikes: {Circuit.spikeWidths}")
+        print("")
+        print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
+        print("")
+        print(f"Frequency: {1/(Circuit.spikeWidths[-1] + Circuit.timeBetweenSpikes[-1]):.0f} Hz")
+        
+    CircuitTest(0.000002, 40001, plot = True)
 
 
     def CapacitorCheck(C, N, T, VinFunc):
