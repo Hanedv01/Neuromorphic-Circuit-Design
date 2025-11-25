@@ -187,10 +187,11 @@ def f_V_DS(K, V_GS, V_mem, V_th, R_load, V_DS):
         return V_DS - expr
     return V_DS - V_mem
 
-def Delta_V_mem(dt, V_in, V_mem, C_mem, R_in, R_load, V_DS):
-    return dt*((V_in - V_mem)/(C_mem*R_in) - (V_mem-V_DS)/(C_mem*R_load))
+def Delta_V_mem(dt, V_in, V_mem, C_mem, R_in, R_load, V_DS, R_leak):
+        RC_Voltage = max((V_in - V_mem)/(C_mem*R_in), 0)
+        return dt*(RC_Voltage - (V_mem-V_DS)/(C_mem*R_load) - V_mem/(C_mem*R_leak))
 
-def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt):
+def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt, R_leak):
     V_GS, V_DS, V_mem_new = x
 
     # 1. Hysteresis relation
@@ -201,7 +202,7 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt):
     f2 = f_V_DS(K, V_GS, V_mem_old, V_th, R_load, V_DS)
 
     # 3. Membrane capacitor update
-    f3 = V_mem_new - (V_mem_old + Delta_V_mem(dt, V_in, V_mem_old, C_mem, R_in, R_load, V_DS))
+    f3 = V_mem_new - (V_mem_old + Delta_V_mem(dt, V_in, V_mem_old, C_mem, R_in, R_load, V_DS, R_leak))
 
     return [f1, f2, f3]
 
@@ -209,16 +210,17 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt):
 
 Vlist = np.ones(6400)*1
 Vlist = np.append(Vlist, Vlist)
-tlist = np.linspace(0,.0010,12800)
-R_in = 1e7
-R_load = 100
-C_mem = 1e-9
-Device = Hysteresis(0.1, 0.1001, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
+tlist = np.linspace(0,1e-5,12800)
+R_in = 3e6 #3.3e6
+R_load = 1e3 #1e2
+R_leak = 1e10
+C_mem = 1e-12 #works well for 1.5e-14
+Device = Hysteresis(0.3, 0.6, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
 V_mem = 0
 V_DS = 0
 V_GS = 0
-V_th = 0.7
-K = 1e-4
+V_th = 0.5
+K = 2e-5
 dt = tlist[1] - tlist[0]
 
 V_mem_list = []
@@ -235,7 +237,7 @@ for i in range(len(tlist)):
     sol = fsolve(
         equations, 
         x0,
-        args=(Device, V_in, V_mem, V_th, R_load, R_in, C_mem, K, dt)
+        args=(Device, V_in, V_mem, V_th, R_load, R_in, C_mem, K, dt, R_leak)
     )
 
     V_GS, V_DS, V_mem = sol
@@ -255,14 +257,37 @@ for i in range(len(tlist)):
     t = tlist[i]
     #if t > 0.1339 and t < 0.1374:
     #    print("V_GS, V_G, V_mem - V_DS", V_GS, V_out, V_mem - V_DS)
+
+on = "False"
+t_lower = 0
+t_upper = 0
+peak_distance = []
+peak_width = []
+for i in range(len(V_out_list)):
+    if i == 0 or i == 1:
+        pass
+    elif V_out_list[i-1] > 0.5:
+        if V_out_list[i] < 0.5:
+            t_upper = tlist[i]
+            peak_width.append(t_upper - t_lower)
+        elif V_out_list[i-2] < 0.5:
+            t_lower = tlist[i]
+            peak_distance.append(t_lower - t_upper)
         
+
+
 plt.figure()
+tlist = tlist*1e9
 plt.plot(tlist,Vlist, label = "V_in", color = "k")
 plt.plot(tlist, V_mem_list, label = "V_mem", color = "r")
-plt.plot(tlist, V_DS_list, label = "V_DS")
-plt.plot(tlist, V_GS_list, label = "V_GS")
+#plt.plot(tlist, V_DS_list, label = "V_DS")
+#plt.plot(tlist, V_GS_list, label = "V_GS")
 plt.plot(tlist, V_out_list, label = "V_out", color = "b")
-plt.xlabel("Time [s]")
+plt.xlabel(u'Time [ns]')
 plt.ylabel("Voltage [V]")
 plt.legend()
 plt.show()
+
+print("Peak distance [ns]: ", peak_distance[-1]*1e9)
+print("MHz", 1/(peak_width[1]+peak_distance[-1])/1e6)
+print("Peak width [ns]: ", peak_width[-1]*1e9)
