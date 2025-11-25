@@ -137,9 +137,9 @@ class LIF_Circuit:
         Ids = self.SolveRecursiveIds(self.Vout, self.Vmem)
         #print(f"Ids = {Ids}")
         if Vin < self.Vmem:
-            dVmem = (-Ids/self.C - self.Vmem/self.Rl)*dt
+            dVmem = (-Ids/self.C - self.Vmem/(self.Rl*self.C))*dt
         else:
-            dVmem = ((Vin-self.Vmem)/(self.Rin*self.C) - self.Vmem/self.Rl - Ids/self.C)*dt
+            dVmem = ((Vin-self.Vmem)/(self.Rin*self.C) - self.Vmem/(self.Rl*self.C) - Ids/self.C)*dt
         self.Vmem += dVmem
         self.HystComp.Update(self.Vmem, t)
         self.Vout = self.HystComp.current
@@ -168,32 +168,23 @@ def main():
         else:
             return 1
         
-    def CircuitTest(T, N, plot=False):
-        MOSFET = FET(0.6,0,1e-4)
-        Vstart = 0.3
-        Vsat = 0.6
-        Isat = 1
-        Vhl = 0.6
-        Vlh = 0.3
-        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
-        Circuit = LIF_Circuit(5e5, 1e12, 1e1, 1e-12, HystDevice, MOSFET)
-        #print(Circuit.SolveRecursiveIds(0,0))
+    def CircuitTest(MOSFET, HystDevice, Circuit, T, N, plot=False):
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
         Vinlist  = []
         Voutlist = []
         Vmemlist = []
         Vdslist  = []
+
         for t in tlist:
-            #Vdslist.append(Circuit.Vmem - Circuit.Rd*Circuit.Step(t, dt, Stepfunction(t)))
+            Vdslist.append(Circuit.Vmem - Circuit.Rd*Circuit.Step(t, dt, Stepfunction(t)))
             #print(t)
-            #Vinlist.append(Stepfunction(t))
-            Circuit.Step(t, dt, SpikeTrain(t, 1.57e-7, 5.6e-8))
-            Vinlist.append(SpikeTrain(t, 1.57e-7, 5.6e-8))
+            Vinlist.append(Stepfunction(t))
+            #Circuit.Step(t, dt, SpikeTrain(t, 1.57e-7, 5.6e-8))
+            #Vinlist.append(SpikeTrain(t, 1.57e-7, 5.6e-8))
             Voutlist.append(Circuit.Vout)
             Vmemlist.append(Circuit.Vmem)
 
-        
         if plot:
             plt.plot(tlist, Vinlist,  label="Vin")
             plt.plot(tlist, Voutlist, label="Vout")
@@ -204,13 +195,70 @@ def main():
             plt.legend()
             plt.show()
 
-        print(f"Width of spikes: {Circuit.spikeWidths}")
-        print("")
-        print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
-        print("")
-        print(f"Frequency: {1/(Circuit.spikeWidths[-1] + Circuit.timeBetweenSpikes[-1]):.0f} Hz")
+        if not len(Circuit.spikeWidths) == 0 and not len(Circuit.timeBetweenSpikes) == 0:
+            print(f"Width of spikes: {Circuit.spikeWidths}")
+            print("")
+            print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
+            print("")
+            frequency = 1/(Circuit.spikeWidths[-1] + Circuit.timeBetweenSpikes[-1])
+            print(f"Frequency: {frequency:.0f} Hz")
+            return [Circuit.spikeWidths[-1], Circuit.timeBetweenSpikes[-1], frequency]
+        else:
+            return [0,0,0]
         
-    CircuitTest(0.000002, 40001, plot = True)
+    MOSFET = FET(0.6,0,2e-5)
+    Vstart = 0.3
+    Vsat = 0.5
+    Isat = 1
+    Vhl = 0.5
+    Vlh = 0.3
+    HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
+    Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
+    #CircuitTest(MOSFET, HystDevice, Circuit, 0.000005, 40001, plot = True)
+
+
+    def GridSearch():
+        VloList = np.linspace(0, 1, 20)
+        VhiList = np.linspace(0, 1, 20)
+        MOSFET = FET(0.6,0,2e-5)
+        reslist = []
+        for Vlo in VloList:
+            for Vhi in VhiList:
+                if Vhi>Vlo:
+                    HystDevice = AFE_FET(Vlo,Vhi,Isat,1e3,1e3,Vhi,Vlo,1e-1,0,0,0)
+                    Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
+                    result = CircuitTest(MOSFET, HystDevice, Circuit, 0.000100, 40001, plot = False)
+                    reslist.append([Vlo, Vhi, result[-1]])
+                    
+        reslist = np.array(reslist)
+        x = reslist[:,0]
+        y = reslist[:,1]
+        z = reslist[:,2]   
+
+        x_unique = np.unique(x)
+        y_unique = np.unique(y)
+        # create a grid initialized with NaN
+        heat = np.full((len(y_unique), len(x_unique)), np.nan)
+
+        # fill the grid
+        for xi, yi, zi in reslist:
+            ix = np.where(x_unique == xi)[0][0]
+            iy = np.where(y_unique == yi)[0][0]
+            heat[iy, ix] = zi
+
+        # plot heatmap
+        plt.imshow(heat, origin='lower', 
+                extent=[x_unique.min(), x_unique.max(),
+                        y_unique.min(), y_unique.max()],
+                aspect='auto')
+
+        plt.colorbar(label="Value")
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.title("Heatmap from triplet data")
+        plt.show()
+    GridSearch()
+    
 
 
     def CapacitorCheck(C, N, T, VinFunc):
@@ -265,7 +313,7 @@ def main():
             plt.xlabel("Vds")
             plt.ylabel("Ids")
             plt.show()
-    #FETCheck(1.7,0,1e-4)
+    #FETCheck(0.6,0,2e-5)
 
 
 
