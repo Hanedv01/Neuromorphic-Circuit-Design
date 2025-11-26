@@ -77,36 +77,12 @@ class LIF_Circuit:
     isInSpike = False
     t_temp = 0
 
-    def SolveRecursiveIds(self, Vout, Vmem):
-        def FET_SignFixer(Ids):
-            """
-            Swaps source and drain if Vds < 0
-            """
-            Vd = Vmem
-            Vs = Ids*self.Rd
-            Vg = Vout
-            Vds = Vd - Vs
-            print(Vds)
-            if Vds >= 0:    # If everything is as it should be
-                Vgs = Vg - Vs
-                return self.MOSFET.GetIds(Vgs, Vds)
-            else:           # If the formula for Ids would get a negative argument
-                Vgd = Vg - Vd
-                Vsd = Vs - Vd
-                Isd = self.MOSFET.GetIds(Vgd, Vsd)
-                return -Isd
-            
+    def SolveRecursiveIds(self, Vmem, Vout):          
         def Ids_optionA(Ids):
-            Vgs = self.Vout - Ids*self.Rd
-            Vds = self.Vmem - Ids*self.Rd
+            Vgs = Vout - Ids*self.Rd
+            Vds = Vmem - Ids*self.Rd
             if abs(Vds) <= 1e-15:       # Necessary for stability
                 Vds = 0
-            #print(f"Vds = {Vds}")
-            return self.MOSFET.GetIds(Vgs,Vds)
-
-        def Ids_optionB(Ids):
-            Vgs = self.Vout - self.Vmem
-            Vds = Ids*self.Rd - self.Vmem
             #print(f"Vds = {Vds}")
             return self.MOSFET.GetIds(Vgs,Vds)
             
@@ -123,6 +99,25 @@ class LIF_Circuit:
             raise RuntimeError("Ids solution did not converge.")
         return sol.root
     
+    def GetAsymptote(self, Vin):
+        """
+        Requires relatively large Ron!
+        """
+        storedTau = self.HystComp.tau
+        self.HystComp.tau = 1e20
+
+        def FuncVmem(Vmem):
+            return (Vin/self.Rin - self.SolveRecursiveIds(Vmem, self.HystComp.Isat0))/(1/self.Rin + 1/self.Rl)
+
+        def residual(Vmem):
+            return Vmem - FuncVmem(Vmem)
+        
+        sol = root_scalar(residual, bracket=[0,Vin], method='brentq')
+        if not sol.converged:
+            raise RuntimeError("Asymptotic Vmem solution did not converge.")
+        return sol.root
+
+    
     def Step(self, t, dt, Vin):
         def WidthUpdate(t):
             if self.isInSpike == False and self.Vout >= self.HystComp.Isat0:
@@ -134,7 +129,7 @@ class LIF_Circuit:
                 self.spikeWidths.append(t - self.t_temp)
                 self.t_temp = t
 
-        Ids = self.SolveRecursiveIds(self.Vout, self.Vmem)
+        Ids = self.SolveRecursiveIds(self.Vmem, self.Vout)
         #print(f"Ids = {Ids}")
         if Vin < self.Vmem:
             dVmem = (-Ids/self.C - self.Vmem/(self.Rl*self.C))*dt
@@ -196,39 +191,39 @@ def main():
             plt.show()
 
         if not len(Circuit.spikeWidths) == 0 and not len(Circuit.timeBetweenSpikes) == 0:
-            print(f"Width of spikes: {Circuit.spikeWidths}")
-            print("")
-            print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
-            print("")
+            #print(f"Width of spikes: {Circuit.spikeWidths}")
+            #print("")
+            #print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
+            #print("")
             frequency = 1/(Circuit.spikeWidths[-1] + Circuit.timeBetweenSpikes[-1])
-            print(f"Frequency: {frequency:.0f} Hz")
+            #print(f"Frequency: {frequency:.0f} Hz")
             return [Circuit.spikeWidths[-1], Circuit.timeBetweenSpikes[-1], frequency]
         else:
             return [0,0,0]
         
     MOSFET = FET(0.6,0,2e-5)
-    Vstart = 0.3
+    Vstart = 0.01
     Vsat = 0.5
     Isat = 1
     Vhl = 0.5
-    Vlh = 0.3
+    Vlh = 0.01
     HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
     Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
-    #CircuitTest(MOSFET, HystDevice, Circuit, 0.000005, 40001, plot = True)
-
+    CircuitTest(MOSFET, HystDevice, Circuit, 0.000005, 40001, plot = True)
+    print(Circuit.GetAsymptote(1))
 
     def GridSearch():
-        VloList = np.linspace(0, 1, 20)
-        VhiList = np.linspace(0, 1, 20)
-        MOSFET = FET(0.6,0,2e-5)
+        RinList = np.logspace(1, 12, 12)
+        RsList = np.logspace(1, 10, 10)
+        MOSFET = FET(0.7,0,2e-5)
         reslist = []
-        for Vlo in VloList:
-            for Vhi in VhiList:
-                if Vhi>Vlo:
-                    HystDevice = AFE_FET(Vlo,Vhi,Isat,1e3,1e3,Vhi,Vlo,1e-1,0,0,0)
-                    Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
-                    result = CircuitTest(MOSFET, HystDevice, Circuit, 0.000100, 40001, plot = False)
-                    reslist.append([Vlo, Vhi, result[-1]])
+        for Rin in RinList:
+            for Rs in RsList:
+                HystDevice = AFE_FET(0.1,0.7,1,1e3,1e3,0.7,0.1,1e-1,0,0,0)
+                Circuit = LIF_Circuit(Rin, 1e12, Rs, 1e-10, HystDevice, MOSFET)
+                result = CircuitTest(MOSFET, HystDevice, Circuit, 0.001, 200001, plot = False)
+                reslist.append([Rin, Rs, result[-1]])
+                print(Rin, Rs, result[-1])
                     
         reslist = np.array(reslist)
         x = reslist[:,0]
@@ -252,12 +247,12 @@ def main():
                         y_unique.min(), y_unique.max()],
                 aspect='auto')
 
-        plt.colorbar(label="Value")
-        plt.xlabel("x")
-        plt.ylabel("y")
-        plt.title("Heatmap from triplet data")
+        plt.colorbar(label="Frequency")
+        plt.xlabel("Rin")
+        plt.ylabel("Rs")
+        plt.title("Frequency heatmap")
         plt.show()
-    GridSearch()
+    #GridSearch()
     
 
 
