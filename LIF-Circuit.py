@@ -163,7 +163,7 @@ def main():
         else:
             return 1
         
-    def CircuitTest(MOSFET, HystDevice, Circuit, T, N, plot=False):
+    def CircuitTest(Circuit, T, N, plot=False):
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
         Vinlist  = []
@@ -187,6 +187,7 @@ def main():
             #plt.plot(tlist, Vdslist,  label="Ids")
             plt.xlabel("t [s]")
             plt.ylabel("V [V]")
+            plt.title("Neuron dynamics: hysteresis device never turns off")
             plt.legend()
             plt.show()
 
@@ -201,16 +202,64 @@ def main():
         else:
             return [0,0,0]
         
-    MOSFET = FET(0.6,0,2e-5)
-    Vstart = 0.01
-    Vsat = 0.5
+    MOSFET = FET(0.6,0,0.9e-5)
+    Vstart = 0.1
+    Vsat = 0.7
     Isat = 1
-    Vhl = 0.5
-    Vlh = 0.01
+    Vhl = 0.7
+    Vlh = 0.1
     HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
-    Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
-    CircuitTest(MOSFET, HystDevice, Circuit, 0.000005, 40001, plot = True)
+    Circuit = LIF_Circuit(1e6, 1e12, 1e2, 1e-12, HystDevice, MOSFET)
+    CircuitTest(Circuit, 0.00001, 40001, plot = True)
     print(Circuit.GetAsymptote(1))
+
+    def AsymptoteSearch(parameter):
+        Vstart = 0.01
+        Vsat = 0.5
+        Isat = 1
+        Vhl = 0.5
+        Vlh = 0.01
+        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
+        resultlist = []
+        MOSFET = FET(0.6,0,2e-5)
+        if parameter == "Rin":
+            Rlist = np.logspace(2, 15, 100)
+            for R in Rlist:
+                Circuit = LIF_Circuit(R, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
+                resultlist.append(Circuit.GetAsymptote(1))
+            plt.plot(Rlist, resultlist)
+            plt.xlabel("Rin [Ohm]")
+            plt.xscale("log")
+        elif parameter == "Rl":
+            Rlist = np.logspace(1, 18, 100)
+            for R in Rlist:
+                Circuit = LIF_Circuit(3e6, R, 1e3, 1e-12, HystDevice, MOSFET)
+                resultlist.append(Circuit.GetAsymptote(1))
+            plt.plot(Rlist, resultlist)
+            plt.xlabel("Rl [Ohm]")
+            plt.xscale("log")
+        elif parameter == "C":      #No effect
+            Clist = np.linspace(1e-11, 1e-13, 100)
+            for C in Clist:
+                Circuit = LIF_Circuit(3e6, 1e12, 1e3, C, HystDevice, MOSFET)
+                resultlist.append(Circuit.GetAsymptote(1))
+            plt.plot(Clist, resultlist)
+            plt.xlabel("C [F]")
+        elif parameter == "K":
+            Klist = np.linspace(5e-6, 1e-4, 50)
+            for K in Klist:
+                MOSFET = FET(0.6,0,K)
+                Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
+                resultlist.append(Circuit.GetAsymptote(1))
+            plt.plot(Klist, resultlist)
+            plt.xlabel("K [A/V^2]")
+        else:
+            print(f"Please enter a valid parameter! You entered {parameter}")
+        plt.ylabel("Asymptote [V]")
+        plt.show()
+    #AsymptoteSearch("C")
+
+
 
     def GridSearch():
         RinList = np.logspace(1, 12, 12)
