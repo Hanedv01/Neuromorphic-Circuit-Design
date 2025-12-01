@@ -210,16 +210,16 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt, R_
 
 Vlist = np.ones(6400)*1
 Vlist = np.append(Vlist, Vlist)
-tlist = np.linspace(0,1e-5,12800)
-R_in = 3e6 #3.3e6
-R_load = 1e3 #1e2
-R_leak = 1e10
-C_mem = 1e-12 #works well for 1.5e-14
-Device = Hysteresis(0.3, 0.6, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
+tlist = np.linspace(0,0.0003,12800)
+R_in = 5e6 #3.3e6
+R_load = 1e2 #1e2
+R_leak = 1e32
+C_mem = 1e-11 #works well for 1.5e-14
+Device = Hysteresis(0.1, 0.7, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
 V_mem = 0
 V_DS = 0
 V_GS = 0
-V_th = 0.5
+V_th = 0.4
 K = 2e-5
 dt = tlist[1] - tlist[0]
 
@@ -263,6 +263,7 @@ t_lower = 0
 t_upper = 0
 peak_distance = []
 peak_width = []
+
 for i in range(len(V_out_list)):
     if i == 0 or i == 1:
         pass
@@ -283,11 +284,11 @@ plt.plot(tlist, V_mem_list, label = "V_mem", color = "r")
 #plt.plot(tlist, V_DS_list, label = "V_DS")
 #plt.plot(tlist, V_GS_list, label = "V_GS")
 plt.plot(tlist, V_out_list, label = "V_out", color = "b")
-plt.xlabel(u'Time [ns]')
+plt.xlabel(u'Time [\xb5s]')
 plt.ylabel("Voltage [V]")
 plt.legend()
 plt.show()
 
-print("Peak distance [ns]: ", peak_distance[-1]*1e9)
-print("MHz", 1/(peak_width[1]+peak_distance[-1])/1e6)
-print("Peak width [ns]: ", peak_width[-1]*1e9)
+print(u"Peak distance [\xb5s]: ", peak_distance[-1]*1e6)
+print("kHz", 1/(peak_width[1]+peak_distance[-1])/1e3)
+print(u"Peak width [\xb5s]: ", peak_width[-1]*1e6)
