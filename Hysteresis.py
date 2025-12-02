@@ -30,10 +30,6 @@ class AFE_FET:
         if self.Vlh0 > self.Vsat0:
             raise ValueError("Vlh should be smaller than Vsat!")
 
-    
-    # ------------------------------------------------------------------------------
-    #   Functions which define behaviour in different parts of the hysteresis loop
-    # ------------------------------------------------------------------------------
 
     # Gives a straight line with variable slope and intercept
     def Line(self, V, slope, intersect):
@@ -48,9 +44,12 @@ class AFE_FET:
             return a*V**2 + b*V + c
         else:
             raise ValueError("Make sure that V0 and V1 differ!")
+        
+    # Adds the time when a shift happened to the list
     def AddSpike(self, tSpike):
         self.SpikeTimes = np.append(self.SpikeTimes, tSpike)
 
+    # Shifts any parameter by delta, decaying with tau
     def Shift(self, t, delta, tau):
         output = 0
         for tSpike in self.SpikeTimes:
@@ -58,6 +57,7 @@ class AFE_FET:
                 output += delta * np.exp(-(t-tSpike) / tau)
         return output
     
+    # Same as above but ignores the last spiketime in the list
     def ShiftNotLast(self, t, delta, tau):
         output = 0
         for tSpike in self.SpikeTimes[:-1]:
@@ -65,7 +65,9 @@ class AFE_FET:
                 output += delta * np.exp(-(t-tSpike) / tau)
         return output
 
-
+    # ----------------------------------------------------------------
+    #   Master function: Gives output given an input and prior state
+    # ----------------------------------------------------------------
     def Update(self, Vnew, t):
         """
         Updates the current, given the past state and new voltage
@@ -117,26 +119,24 @@ class AFE_FET:
                         
 
 
-# Flytta turn on till ett senare segment
-# Alternativt flytta den till Vstart0 och brute forcea om vi har en switch mellan Vstart0 och Vstart
-
 
 def main():
     import matplotlib.pyplot as plt
-    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 0, 0)
-    """
-    for tSpike in [0.3, 0.4, 0.8]:
+    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 1, 0.5)
+    for tSpike in [1, 4, 4.5]:
         x.AddSpike(tSpike)
 
-    tlist = np.linspace(0,1,100)
+    tlist = np.linspace(0,10,1000)
     Ilist = []
     for t in tlist:
-        Ilist.append(x.Shift(t, 1, 0.1))
+        Ilist.append(x.Shift(t, 1, 1))
     
     plt.plot(tlist, Ilist)
+    plt.xlabel("t [s]")
+    plt.ylabel("Shift [a.u.]")
+    plt.title(r"$\delta$"+"x as a function of time with three spikes")
     plt.show()
     print(x.SpikeTimes)
-    """
 
 
     """
@@ -169,9 +169,9 @@ def main():
         plt.plot(Vlist, Ilist)
         plt.show()
     smallTest()
-
     """
-    TP = 10
+    """
+    TP = 9
     Alist = np.linspace(0, TP, 100)
     Blist = np.linspace(TP, 0, 100)
     Vlist = np.concatenate((Alist, Blist))
@@ -204,10 +204,15 @@ def main():
     print(x.SpikeTimes)
     print(t)
 
-    plt.plot(Vlist, Ilist1, color="red")
-    plt.plot(Vlist, Ilist2, color="blue")
-    plt.plot(Vlist, Ilist3, color="green")
+    plt.plot(Vlist, Ilist1, label="Loop 1", color="red")
+    plt.plot(Vlist, Ilist2, label="Loop 2", color="blue")
+    plt.plot(Vlist, Ilist3, label="Loop 3", color="green")
+    plt.xlabel("V [a.u.]")
+    plt.ylabel("I [a.u.]")
+    plt.legend()
+    plt.title("I-V characteristics of the Hysteris class")
     plt.show()
+    """
 
     
 
