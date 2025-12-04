@@ -176,22 +176,22 @@ def f_V_GS(hyst_obj_copy, V_mem, V_DS, dt):
     return V_hyst - D_V
 
 
-def f_V_DS(K, V_GS, V_mem, V_th, R_load, V_DS):
+def f_V_DS(K, V_GS, V_mem, V_th, R_S, V_DS):
     if V_GS < V_th:
         return V_DS - V_mem
     elif V_DS > 0 and V_DS < V_GS - V_th:
-        expr = V_mem - R_load*K*((V_GS - V_th)*V_DS - V_DS**2/2)
+        expr = V_mem - R_S*K*((V_GS - V_th)*V_DS - V_DS**2/2)
         return V_DS - expr
     elif V_DS > V_GS - V_th and V_GS - V_th > 0:
-        expr = V_mem - R_load*(K/2)*(V_GS - V_th)**2
+        expr = V_mem - R_S*(K/2)*(V_GS - V_th)**2
         return V_DS - expr
     return V_DS - V_mem
 
-def Delta_V_mem(dt, V_in, V_mem, C_mem, R_in, R_load, V_DS, R_leak):
+def Delta_V_mem(dt, V_in, V_mem, C_mem, R_in, R_S, V_DS, R_L):
         RC_Voltage = max((V_in - V_mem)/(C_mem*R_in), 0)
-        return dt*(RC_Voltage - (V_mem-V_DS)/(C_mem*R_load) - V_mem/(C_mem*R_leak))
+        return dt*(RC_Voltage - (V_mem-V_DS)/(C_mem*R_S) - V_mem/(C_mem*R_L))
 
-def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt, R_leak):
+def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_S, R_in, C_mem, K, dt, R_L):
     V_GS, V_DS, V_mem_new = x
 
     # 1. Hysteresis relation
@@ -199,27 +199,33 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_load, R_in, C_mem, K, dt, R_
     f1 = f_V_GS(hyst_obj_copy, V_mem_old, V_DS, dt) - V_GS
 
     # 2. MOSFET DS equation
-    f2 = f_V_DS(K, V_GS, V_mem_old, V_th, R_load, V_DS)
+    f2 = f_V_DS(K, V_GS, V_mem_old, V_th, R_S, V_DS)
 
     # 3. Membrane capacitor update
-    f3 = V_mem_new - (V_mem_old + Delta_V_mem(dt, V_in, V_mem_old, C_mem, R_in, R_load, V_DS, R_leak))
+    f3 = V_mem_new - (V_mem_old + Delta_V_mem(dt, V_in, V_mem_old, C_mem, R_in, R_S, V_DS, R_L))
 
     return [f1, f2, f3]
 
+#E_spike_list = [] #left overs from running for loop
+#P_list = []
 
 
-Vlist = np.ones(6400)*1
+Vlist = np.ones(81920)*1
 Vlist = np.append(Vlist, Vlist)
-tlist = np.linspace(0,0.0003,12800)
-R_in = 5e6 #3.3e6
-R_load = 1e2 #1e2
-R_leak = 1e32
+tlist = np.linspace(0,0.0008,163840)
+R_in = 7e6 #3.3e6
+R_S = 1e2 #1e2
+R_L = 1e32
+R_on = 1e3
+R_off = 1e3
+V_LH = 0.1
+V_HL = 0.7
 C_mem = 1e-11 #works well for 1.5e-14
-Device = Hysteresis(0.1, 0.7, 1e-6, 1e-6, 1e3, 1e3, 1, 0 ,0 , 0, 0, 0.2)
+Device = Hysteresis(V_LH, V_HL, 1e-32, 1e-32, R_off, R_on, 1, 0 ,0 , 0, 0, 0.2)
 V_mem = 0
 V_DS = 0
 V_GS = 0
-V_th = 0.4
+V_th = 0.7
 K = 2e-5
 dt = tlist[1] - tlist[0]
 
@@ -237,7 +243,7 @@ for i in range(len(tlist)):
     sol = fsolve(
         equations, 
         x0,
-        args=(Device, V_in, V_mem, V_th, R_load, R_in, C_mem, K, dt, R_leak)
+        args=(Device, V_in, V_mem, V_th, R_S, R_in, C_mem, K, dt, R_L)
     )
 
     V_GS, V_DS, V_mem = sol
@@ -259,22 +265,28 @@ for i in range(len(tlist)):
     #    print("V_GS, V_G, V_mem - V_DS", V_GS, V_out, V_mem - V_DS)
 
 on = "False"
-t_lower = 0
-t_upper = 0
-peak_distance = []
-peak_width = []
+t_start = 0 #start of spike
+t_end = 0 #end of spike
+spike_interval = [] #list of time between spikes
+spike_width = [] #list of time of spikes
+a_list = [] #list of voltage slopes of spikes
+V_end = 0 #Voltage at the end of spike
+V_start = 0 #Voltage at the beginning of spike
 
 for i in range(len(V_out_list)):
-    if i == 0 or i == 1:
+    if i == 0 or i == 1: #No spikes will occur at the first two time steps so this is okay
         pass
-    elif V_out_list[i-1] > 0.5:
-        if V_out_list[i] < 0.5:
-            t_upper = tlist[i]
-            peak_width.append(t_upper - t_lower)
-        elif V_out_list[i-2] < 0.5:
-            t_lower = tlist[i]
-            peak_distance.append(t_lower - t_upper)
-        
+    elif V_out_list[i-1] > 0.5: #When the output voltage increases over 0 (0.5 for saftey) we have a spike
+        if V_out_list[i] < 0.5: # If the next timestep have a lower voltage we are at the end of the spike
+            t_end = tlist[i-1]
+            V_end = V_out_list[i-1]
+            spike_width.append(t_end - t_start)
+            a_list.append((V_end-V_start)/(t_end - t_start)) #the formula for the slope of V(t) in the spike
+        elif V_out_list[i-2] <= 0.5: #if i-1 is above 0.5V and the step before that is below --> i-1 is at the beginning of the spike
+            t_start = tlist[i-1]
+            V_start = V_out_list[i-1]
+            spike_interval.append(t_start - t_end) #spike interval is the difference between the start of new spike and the end of previous spike
+
 
 
 plt.figure()
@@ -289,6 +301,21 @@ plt.ylabel("Voltage [V]")
 plt.legend()
 plt.show()
 
-print(u"Peak distance [\xb5s]: ", peak_distance[-1]*1e6)
-print("kHz", 1/(peak_width[1]+peak_distance[-1])/1e3)
-print(u"Peak width [\xb5s]: ", peak_width[-1]*1e6)
+
+a = a_list[-1]
+V0 = V_end
+T = spike_width[-1]
+
+Frequency = 1/(spike_width[-1]+spike_interval[-1])
+E_per_spike = 1/R_on*(V0**2*T + a*V0*T**2 + a**2*T**3/3)
+Power_consumption = E_per_spike*Frequency
+
+print("V_th = ", V_th, " completed")
+print(u"spike width [\xb5s]: ", spike_width[-1]*1e6)
+print(u"spike distance [\xb5s]: ", spike_interval[-1]*1e6)
+print("Frequency kHz", Frequency/1e3)
+print("Energy per spike [nJ]: ", E_per_spike*1e9)
+print(u"Power consumption [\xb5W]: ", Power_consumption*1e6)
+print("time step [ns]: ", dt*1e9)
+
+
