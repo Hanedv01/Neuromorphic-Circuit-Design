@@ -212,8 +212,8 @@ def equations(x, hyst_obj, V_in, V_mem_old, V_th, R_S, R_in, C_mem, K, dt, R_L):
 
 Vlist = np.ones(81920)*1
 Vlist = np.append(Vlist, Vlist)
-tlist = np.linspace(0,0.0008,163840)
-R_in = 7e6 #3.3e6
+tlist = np.linspace(0,0.00001,163840)
+R_in = 2.3e5 #3.3e6
 R_S = 1e2 #1e2
 R_L = 1e32
 R_on = 1e3
@@ -225,8 +225,8 @@ Device = Hysteresis(V_LH, V_HL, 1e-32, 1e-32, R_off, R_on, 1, 0 ,0 , 0, 0, 0.2)
 V_mem = 0
 V_DS = 0
 V_GS = 0
-V_th = 0.7
-K = 2e-5
+V_th = 0.5
+K = 2.5e-4
 dt = tlist[1] - tlist[0]
 
 V_mem_list = []
