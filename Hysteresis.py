@@ -123,6 +123,7 @@ class AFE_FET:
 def main():
     import matplotlib.pyplot as plt
     x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 1, 0.5)
+    """
     for tSpike in [1, 4, 4.5]:
         x.AddSpike(tSpike)
 
@@ -137,7 +138,7 @@ def main():
     plt.title(r"$\delta$"+"x as a function of time with three spikes")
     plt.show()
     print(x.SpikeTimes)
-
+    """
 
     """
     Vlist = [0,1,2,3,4,5,6,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-1,0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0]
@@ -170,7 +171,7 @@ def main():
         plt.show()
     smallTest()
     """
-    """
+    
     TP = 9
     Alist = np.linspace(0, TP, 100)
     Blist = np.linspace(TP, 0, 100)
@@ -210,9 +211,9 @@ def main():
     plt.xlabel("V [a.u.]")
     plt.ylabel("I [a.u.]")
     plt.legend()
-    plt.title("I-V characteristics of the Hysteris class")
+    plt.title("I-V characteristics of the Hysteresis class")
     plt.show()
-    """
+    
 
     
 

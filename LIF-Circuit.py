@@ -3,29 +3,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import root_scalar
 from Hysteresis import AFE_FET
 
-class Resistor:
-    def __init__(self, R):
-        """Represents an ideal resistor."""
-        self.R = R
-
-    def current(self, V):
-        return V/self.R
-
-class Capacitor:
-    voltage = 0
-    def __init__(self, C):
-        """Represents an ideal capacitor."""
-        self.C = C
-
-    def Charge(self):
-        """Gives the charge on the capacitor."""
-        return self.voltage * self.C
-    
-    def StepUpdate(self, dV):
-        """
-        Updates the voltage over the capacitor
-        """
-        self.voltage += dV
+# För logaritmisk z-skala
+from matplotlib.colors import LogNorm
 
 class FET:
     def __init__(self, Vth, lam, K):
@@ -155,14 +134,16 @@ def main():
         else:
             return 0
         
-    def SpikeTrain(t, tSpike, tPause):
+    def SpikeTrain(t):
+        tSpike = 3e-7
+        tPause = 27e-7
         tTot = tSpike + tPause
         if t%tTot < tPause:
             return 0
         else:
             return 1
         
-    def CircuitTest(Circuit, T, N, plot=False):
+    def CircuitTest(Circuit, T, N, VinFunc, plot=False, sideBySide=False):
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
         Vinlist  = []
@@ -171,26 +152,41 @@ def main():
         Vdslist  = []
 
         for t in tlist:
-            Vdslist.append(Circuit.Vmem - Circuit.Rs*Circuit.Step(t, dt, Stepfunction(t)))
-            #print(t)
-            Vinlist.append(Stepfunction(t))
-            #Circuit.Step(t, dt, SpikeTrain(t, 1.57e-7, 5.6e-8))
-            #Vinlist.append(SpikeTrain(t, 1.57e-7, 5.6e-8))
+            Vin = VinFunc(t)
+            #if t > 3e-6 and t < 10e-6:
+            #    Vin = 0
+            Vdslist.append(Circuit.Vmem - Circuit.Rs*Circuit.Step(t, dt, Vin))
+            Vinlist.append(Vin)
             Voutlist.append(Circuit.Vout)
             Vmemlist.append(Circuit.Vmem)
 
         if plot:
             tlist = tlist * 1e6
-            plt.plot(tlist, Vinlist,  label="Vin")
-            plt.plot(tlist, Voutlist, label="Vout")
-            plt.plot(tlist, Vmemlist, label="Vmem")
-            #plt.plot(tlist, Vdslist,  label="Ids")
-            plt.xlabel("t [μs]", fontsize=16)
-            plt.ylabel("V [V]", fontsize=16)
-            plt.xticks(fontsize=14)
-            plt.yticks(fontsize=14)
-            plt.title("Neuron dynamics: hysteresis device never turns off", fontsize=14)
-            plt.legend(fontsize=14)
+            if not sideBySide:
+                plt.plot(tlist, Vinlist,  label="Vin")
+                plt.plot(tlist, Voutlist, label="Vout")
+                plt.plot(tlist, Vmemlist, label="Vmem")
+                #plt.plot(tlist, Vdslist,  label="Ids")
+                plt.xlabel("t [μs]", fontsize=16)
+                plt.ylabel("V [V]", fontsize=16)
+                plt.xticks(fontsize=14)
+                plt.yticks(fontsize=14)
+                plt.subplots_adjust(bottom=0.125)
+                plt.title("Neuron dynamics: hysteresis device never turns off", fontsize=14)
+                #plt.legend(loc=(0.04,0.68), fontsize=14)
+                plt.legend(fontsize=14)
+            else:
+                fig, axs = plt.subplots(3, sharey=True)
+                fig.suptitle('Neuron dynamics: simulated adaptivity')
+                axs[0].plot(tlist, Vinlist)
+                axs[1].plot(tlist, Vmemlist, 'tab:orange')
+                axs[2].plot(tlist, Voutlist, 'tab:green')
+                for ax in axs.flat:
+                    ax.set(xlabel='t [μs]', ylabel='V [V]')
+
+                # Hide x labels and tick labels for top plots and y ticks for right plots.
+                for ax in axs.flat:
+                    ax.label_outer()
             plt.show()
 
         if not len(Circuit.spikeWidths) == 0 and not len(Circuit.timeBetweenSpikes) == 0:
@@ -204,33 +200,37 @@ def main():
         else:
             return [0,0,0]
         
-    MOSFET = FET(0.6,0,0.9e-5)
+    
+    MOSFET = FET(0.6,0,3e-5)
     Vstart = 0.1
-    Vsat = 0.9
+    Vsat = 0.6
     Isat = 1
-    Vhl = 0.9
+    Vhl = 0.6
     Vlh = 0.1
-    HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
-    Circuit = LIF_Circuit(1e6, 1e12, 1e2, 1e-12, HystDevice, MOSFET)
-    #CircuitTest(Circuit, 0.00001, 40001, plot = True)
-    print(Circuit.GetAsymptote(1))
+    HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-2,0.02,0.01,0)
+    Circuit = LIF_Circuit(4e5, 4e6, 1e1, 1e-12, HystDevice, MOSFET)
+    #print(CircuitTest(Circuit, 0.000032, 40001, plot = True, sideBySide=True))
+    #print(Circuit.GetAsymptote(1))
+    
 
     def AsymptoteSearch(parameter):
-        Vstart = 0.01
-        Vsat = 0.5
+        Vstart = 0.1
+        Vsat = 0.7
         Isat = 1
-        Vhl = 0.5
-        Vlh = 0.01
+        Vhl = 0.7
+        Vlh = 0.1
         HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
         resultlist = []
-        MOSFET = FET(0.6,0,2e-5)
+        MOSFET = FET(0.7,0,2e-5)
         if parameter == "Rin":
-            Rlist = np.logspace(2, 15, 100)
+            Rlist = np.logspace(2, 13, 100)
             for R in Rlist:
-                Circuit = LIF_Circuit(R, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
+                Circuit = LIF_Circuit(R, 1e32, 1e2, 1e-12, HystDevice, MOSFET)
                 resultlist.append(Circuit.GetAsymptote(1))
             plt.plot(Rlist, resultlist)
-            plt.xlabel("Rin [Ohm]")
+            plt.title("On-state asymptote: dependence on " + r"$\mathregular{R_{in}}$", fontsize=14)
+            plt.xlabel(r"$\mathregular{R_{in}}$" +" [Ω]", fontsize=16)
+            plt.subplots_adjust(bottom=0.125)
             plt.xscale("log")
         elif parameter == "Rl":
             Rlist = np.logspace(1, 18, 100)
@@ -248,13 +248,16 @@ def main():
             plt.plot(Clist, resultlist)
             plt.xlabel("C [F]")
         elif parameter == "K":
-            Klist = np.linspace(5e-6, 1e-4, 50)
+            Klist = np.logspace(-9, -1, 100)
             for K in Klist:
                 MOSFET = FET(0.6,0,K)
                 Circuit = LIF_Circuit(3e6, 1e12, 1e3, 1e-12, HystDevice, MOSFET)
                 resultlist.append(Circuit.GetAsymptote(1))
             plt.plot(Klist, resultlist)
-            plt.xlabel("K [A/V^2]")
+            plt.title("On-state asymptote: dependence on K", fontsize=14)
+            plt.xlabel("K [A/V$^2$]", fontsize=16)
+            plt.subplots_adjust(bottom=0.125)
+            plt.xscale("log")
         elif parameter == "Vth":
             Vlist = np.linspace(0.1, 0.9, 100)
             for Vth in Vlist:
@@ -265,26 +268,59 @@ def main():
             plt.xlabel("Vth [V]")
         else:
             print(f"Please enter a valid parameter! You entered {parameter}")
-        plt.ylabel("Asymptote [V]")
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.ylabel("Asymptote [V]", fontsize=16)
         plt.show()
-    #AsymptoteSearch("Vth")
+    #AsymptoteSearch("Rin")
 
 
 
     def GridSearch():
-        RinList = np.logspace(1, 12, 12)
-        RsList = np.logspace(1, 10, 10)
+        def Ratio(result):
+            if abs(result[0]) > 1e-12:
+                #print(result[0])
+                ratio = result[1]/result[0]
+            else:
+                ratio = 0
+            return ratio
+        VlhList = np.linspace(0, 1, 21)
+        VhlList = np.linspace(0, 1, 21)
         MOSFET = FET(0.7,0,2e-5)
         reslist = []
-        for Rin in RinList:
-            for Rs in RsList:
-                HystDevice = AFE_FET(0.1,0.7,1,1e3,1e3,0.7,0.1,1e-1,0,0,0)
-                Circuit = LIF_Circuit(Rin, 1e12, Rs, 1e-10, HystDevice, MOSFET)
-                result = CircuitTest(MOSFET, HystDevice, Circuit, 0.001, 200001, plot = False)
-                reslist.append([Rin, Rs, result[-1]])
-                print(Rin, Rs, result[-1])
+        for Vlh in VlhList:
+            for Vhl in VhlList:
+                if Vhl > Vlh:
+                    print(f"Vlh = {Vlh}, Vhl = {Vhl}")
+                    HystDevice = AFE_FET(Vlh,Vhl,1,1e3,1e3,Vhl,Vlh,1e-1,0,0,0)
+                    Circuit = LIF_Circuit(7e6, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
+                    Circuit.spikeWidths = []
+                    Circuit.timeBetweenSpikes = []
+                    result = CircuitTest(Circuit, 0.001, 40001, plot = False)
+                    print(result)
+                    ratio = Ratio(result)
+                    if not ratio == 0:
+                        if ratio < 8:
+                            Rin = Circuit.Rin*9/ratio
+                            print(f"Ratio was < 8 ({ratio}). Attempting Rin = {Rin}.")
+                            Circuit = LIF_Circuit(Rin, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
+                            Circuit.spikeWidths = []
+                            Circuit.timeBetweenSpikes = []
+                            result = CircuitTest(Circuit, 0.001, 40001, plot = False)
+                            ratio = Ratio(result)
+                        while ratio > 10:
+                            Rin = Circuit.Rin*9/ratio
+                            print(f"Ratio was > 10 ({ratio}). Attempting Rin = {Rin}.")
+                            Circuit = LIF_Circuit(Rin, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
+                            Circuit.spikeWidths = []
+                            Circuit.timeBetweenSpikes = []
+                            result = CircuitTest(Circuit, 0.001, 40001, plot = False)
+                            ratio = Ratio(result)
+                    reslist.append([Vlh, Vhl, result[2]])
+                    print(f"The final ratio was {ratio}.")
                     
         reslist = np.array(reslist)
+        #print(reslist)
         x = reslist[:,0]
         y = reslist[:,1]
         z = reslist[:,2]   
@@ -305,30 +341,16 @@ def main():
                 extent=[x_unique.min(), x_unique.max(),
                         y_unique.min(), y_unique.max()],
                 aspect='auto')
+                #,norm=LogNorm())
 
-        plt.colorbar(label="Frequency")
-        plt.xlabel("Rin")
-        plt.ylabel("Rs")
+        plt.colorbar(label="Frequency [Hz]")
+        plt.xlabel("Vlh [V]")
+        plt.ylabel("Vhl [V]")
         plt.title("Frequency heatmap")
         plt.show()
     #GridSearch()
 
-    def RC_CircuitCheck(C, R, N, T, VinFunc):
-        Cap = Capacitor(C)
-        Res = Resistor(R)
-        dt = T/(N-1)
-        tlist = np.linspace(0, T, N)
-        Ilist = []
-        Vclist = []
-        for t in tlist:
-            Vin = VinFunc(t)
-            dVc = (Vin-Cap.voltage)*dt / (R*C)
-            Cap.StepUpdate(dVc)
-            Ilist.append(C* dVc/dt)
-            Vclist.append(Cap.voltage)
-        plt.plot(tlist, Vclist)
-        plt.show()
-    #RC_CircuitCheck(1e-6, 1e6, 1001, 10, Stepfunction)
+
 
     def FET_VgsSweep():
         Vgslist = [0, 2, 4, 6]
@@ -374,7 +396,43 @@ def main():
             plt.show()
     #FETCheck(0.6,0,2e-5)
 
-# Ändra Rd till Rs (bara notation!)
+    def VinPlot():
+        MOSFET = FET(0.7,0,2e-5)
+        Vstart = 0.1
+        Vsat = 0.7
+        Isat = 1
+        Vhl = 0.7
+        Vlh = 0.1
+        HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-2,0,0,0)
+        Circuit = LIF_Circuit(7e6, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
+
+        VinList = np.linspace(0, 2, 3)
+        freqList = []
+        for Vin in VinList:
+            Circuit = LIF_Circuit(7e6, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
+            Circuit.spikeWidths = []
+            Circuit.timeBetweenSpikes = []
+            def StepScaled(t):
+                return Vin*Stepfunction(t)
+            result = CircuitTest(Circuit, 0.001, 40001, StepScaled, plot = False)
+            if result[2] == 0:
+                freq = None
+            else:
+                freq = result[2]/1e3
+            freqList.append(freq)
+            print(f"Finished Vin = {Vin}")
+        print(f"Vinlist = {VinList}")
+        print(f"Frequencies = {freqList}")
+        plt.plot(VinList, freqList, '.')
+        plt.ylim(bottom=0)
+        plt.xlim(left=0)
+        plt.ylabel("Frequency [kHz]")
+        plt.xlabel(r"$\mathregular{V_{in}}$"+" [V]")
+        plt.title("Frequency as a function of the in-signal amplitude")
+        plt.show()
+    VinPlot()
+
+
 
 
 if __name__ == "__main__":
