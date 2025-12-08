@@ -406,7 +406,7 @@ def main():
         HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-2,0,0,0)
         Circuit = LIF_Circuit(7e6, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
 
-        VinList = np.linspace(0, 2, 3)
+        VinList = np.linspace(0.6, 0.8, 11)
         freqList = []
         for Vin in VinList:
             Circuit = LIF_Circuit(7e6, 1e32, 1e2, 1e-11, HystDevice, MOSFET)
@@ -414,7 +414,7 @@ def main():
             Circuit.timeBetweenSpikes = []
             def StepScaled(t):
                 return Vin*Stepfunction(t)
-            result = CircuitTest(Circuit, 0.001, 40001, StepScaled, plot = False)
+            result = CircuitTest(Circuit, 0.1, 40001, StepScaled, plot = False)
             if result[2] == 0:
                 freq = None
             else:
@@ -430,7 +430,7 @@ def main():
         plt.xlabel(r"$\mathregular{V_{in}}$"+" [V]")
         plt.title("Frequency as a function of the in-signal amplitude")
         plt.show()
-    VinPlot()
+    #VinPlot()
 
 
 
