@@ -10,6 +10,7 @@ class AFE_FET:
         """
         Represents a device with the I-V characteristics of a hysteresis loop. 
         
+        For explanation of the meaning of different parameters, see report.
         """
         self.Vstart0 = Vstart
         self.Vsat0 = Vsat
@@ -68,7 +69,7 @@ class AFE_FET:
     # ----------------------------------------------------------------
     #   Master function: Gives output given an input and prior state
     # ----------------------------------------------------------------
-    def Update(self, Vnew, t):
+    def Update(self, Vnew, t, Vpower=1):
         """
         Updates the current, given the past state and new voltage
         """
@@ -77,7 +78,7 @@ class AFE_FET:
         # Update voltages and currents according to shift
         Vstart = self.Vstart0 + self.Shift(t, self.deltaVoff, self.tau)
         Vsat   = self.Vsat0   + self.Shift(t, self.deltaVon, self.tau)
-        Isat   = self.Isat0   + self.Shift(t, self.deltaI, self.tau)
+        Isat   = Vpower*(self.Isat0   + self.Shift(t, self.deltaI, self.tau))
         Vhl    = self.Vhl0    + self.Shift(t, self.deltaVon, self.tau)
         Vlh    = self.Vlh0    + self.Shift(t, self.deltaVoff, self.tau)
         # Create an upper current ceiling
@@ -122,40 +123,43 @@ class AFE_FET:
 
 def main():
     import matplotlib.pyplot as plt
-    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 1, 0.5)
-    """
-    for tSpike in [1, 4, 4.5]:
-        x.AddSpike(tSpike)
-
-    tlist = np.linspace(0,10,1000)
-    Ilist = []
-    for t in tlist:
-        Ilist.append(x.Shift(t, 1, 1))
+    x = AFE_FET(1, 7, 10, 1e1, 1e1, 5, 3, 1000, 1, 1, 1)
     
-    plt.plot(tlist, Ilist)
-    plt.xlabel("t [s]")
-    plt.ylabel("Shift [a.u.]")
-    plt.title(r"$\delta$"+"x as a function of time with three spikes")
-    plt.show()
-    print(x.SpikeTimes)
-    """
+    def SpikeTest():
+        # To test if spikes integrate and decay as they should
+        for tSpike in [1, 4, 4.5]:
+            x.AddSpike(tSpike)
 
-    """
-    Vlist = [0,1,2,3,4,5,6,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-1,0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0]
-    Ilist = []
-    tlist = [0]
-    for V in Vlist:
-        t = tlist[-1] + 0.1
-        tlist.append(t)
-        x.Update(V, t)
-        Ilist.append(x.current)
+        tlist = np.linspace(0,10,1000)
+        Ilist = []
+        for t in tlist:
+            Ilist.append(x.Shift(t, 1, 1))
+        
+        plt.plot(tlist, Ilist)
+        plt.xlabel("t [s]")
+        plt.ylabel("Shift [a.u.]")
+        plt.title(r"$\delta$"+"x as a function of time with three spikes")
+        plt.show()
+        print(x.SpikeTimes)
+    #SpikeTest()
 
-    plt.plot(Vlist, Ilist, color="blue")
-    plt.show()
-    """
-    """
-    def smallTest():
-        A = AFE_FET(0,1,1,1e3,1e3,1,0,1000, 0,0)
+    def DiscreteTest():
+        # To test how the class behaves for large changes in input signal.
+        Vlist = [0,1,2,3,4,5,6,5,6,7,8,7,6,5,4,3,2,1,0,-1,-2,-1,0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0]
+        Ilist = []
+        tlist = [0]
+        for V in Vlist:
+            t = tlist[-1] + 0.1
+            tlist.append(t)
+            x.Update(V, t)
+            Ilist.append(x.current)
+
+        plt.plot(Vlist, Ilist, color="blue")
+        plt.show()
+
+    def SmallTest():
+        # To test the bahaviour of a smaller device, more suited for a circuit.
+        A = AFE_FET(0,1,1,1e3,1e3,1,0,1000,0,0)
         TP = 1.3
         Alist = np.linspace(0, TP, 100)
         Blist = np.linspace(TP, 0, 100)
@@ -169,50 +173,55 @@ def main():
             Ilist.append(A.current)
         plt.plot(Vlist, Ilist)
         plt.show()
-    smallTest()
-    """
-    
-    TP = 9
-    Alist = np.linspace(0, TP, 100)
-    Blist = np.linspace(TP, 0, 100)
-    Vlist = np.concatenate((Alist, Blist))
-    Vlist2 = np.concatenate((Alist, Blist, Alist, Blist))
-    #Vlistbad = [0,1,1.2,1.4,1.6,1.8,1.6,1.4,1.2,1,0.9,1,1.2,1.4,1.6,1.8,2,3,4,5,6,7,8,7,6,5,4,3,2,1.8,1.6,1.4,1.2,1,0.9,1,1.2,1.4,1.6,1.8,2,2.1,2,1.8,1.6,1.4,1.2,1,0]
-    #Vlist = [1,3,2,8,4,6,3,7,3,1]
-    Ilist1 = []
-    Ilist2 = []
-    Ilist3 = []
-    tlist = [0]
-    for V in Vlist:
-        t = tlist[-1] + 0.1
-        tlist.append(t)
-        x.Update(V, t)
-        Ilist1.append(x.current)
-    print(x.SpikeTimes)
+    #SmallTest()
 
-    for V in Vlist:
-        t = tlist[-1] + 0.1
-        tlist.append(t)
-        x.Update(V, t)
-        Ilist2.append(x.current)
-    print(x.SpikeTimes)
+    HystDevice2 = AFE_FET(0.3,0.7,1e-5,1e6,1e6,0.7,0.3,1e9,0,0.0,1e-6)
+    def TripleTest(Device):
+        # To clearly show three consequtive loops
+        Vpower = 0.5
+        dt = 0.1
+        TP = 1
+        Alist = np.linspace(0, TP, 100)
+        Blist = np.linspace(TP, 0, 100)
+        Vlist = np.concatenate((Alist, Blist))
+        Vlist2 = np.concatenate((Alist, Blist, Alist, Blist))
+        #Vlistbad = [0,1,1.2,1.4,1.6,1.8,1.6,1.4,1.2,1,0.9,1,1.2,1.4,1.6,1.8,2,3,4,5,6,7,8,7,6,5,4,3,2,1.8,1.6,1.4,1.2,1,0.9,1,1.2,1.4,1.6,1.8,2,2.1,2,1.8,1.6,1.4,1.2,1,0]
+        #Vlist = [1,3,2,8,4,6,3,7,3,1]
+        Ilist1 = []
+        Ilist2 = []
+        Ilist3 = []
+        tlist = [0]
+        for V in Vlist:
+            t = tlist[-1] + dt
+            tlist.append(t)
+            Device.Update(V, t, Vpower)
+            Ilist1.append(Device.current)
+        print(Device.SpikeTimes)
 
-    for V in Vlist:
-        t = tlist[-1] + 0.1
-        tlist.append(t)
-        x.Update(V, t)
-        Ilist3.append(x.current)
-    print(x.SpikeTimes)
-    print(t)
+        for V in Vlist:
+            t = tlist[-1] + dt
+            tlist.append(t)
+            Device.Update(V, t, Vpower)
+            Ilist2.append(Device.current)
+        print(Device.SpikeTimes)
 
-    plt.plot(Vlist, Ilist1, label="Loop 1", color="red")
-    plt.plot(Vlist, Ilist2, label="Loop 2", color="blue")
-    plt.plot(Vlist, Ilist3, label="Loop 3", color="green")
-    plt.xlabel("V [a.u.]")
-    plt.ylabel("I [a.u.]")
-    plt.legend()
-    plt.title("I-V characteristics of the Hysteresis class")
-    plt.show()
+        for V in Vlist:
+            t = tlist[-1] + dt
+            tlist.append(t)
+            Device.Update(V, t, Vpower)
+            Ilist3.append(Device.current)
+        print(Device.SpikeTimes)
+        print(t)
+
+        plt.plot(Vlist, Ilist1, label="Loop 1", color="red")
+        plt.plot(Vlist, Ilist2, label="Loop 2", color="blue")
+        plt.plot(Vlist, Ilist3, label="Loop 3", color="green")
+        plt.xlabel("V [a.u.]")
+        plt.ylabel("I [a.u.]")
+        plt.legend()
+        plt.title("I-V characteristics of the Hysteresis class")
+        plt.show()
+    #TripleTest(HystDevice2)
     
 
     

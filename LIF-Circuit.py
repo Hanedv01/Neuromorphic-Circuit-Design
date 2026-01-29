@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import root_scalar
 from Hysteresis import AFE_FET
 
-# För logaritmisk z-skala
+# For logarithmic z-skscale
 from matplotlib.colors import LogNorm
 
 class FET:
@@ -28,7 +28,7 @@ class FET:
         
     
 class LIF_Circuit:
-    def __init__(self, Rin, Rl, Rs, C, HystComp, MOSFET):
+    def __init__(self, Rin, Rl, Rs, C, HystComp, MOSFET, HystComp2=None):
         """
         Components:
         -------------------
@@ -46,6 +46,7 @@ class LIF_Circuit:
         self.Rs = Rs
         self.HystComp = HystComp
         self.MOSFET = MOSFET
+        self.HystComp2 = HystComp2
     
     Vmem = 0
     Vout = 0
@@ -79,7 +80,9 @@ class LIF_Circuit:
     
     def GetAsymptote(self, Vin):
         """
-        Requires relatively large Ron!
+        Returns the value of the on-state asymptote for a given Vin.
+
+        This is under the assumption of a large Ron.
         """
         storedTau = self.HystComp.tau
         self.HystComp.tau = 1e20
@@ -91,12 +94,16 @@ class LIF_Circuit:
             return Vmem - FuncVmem(Vmem)
         
         sol = root_scalar(residual, bracket=[0,Vin], method='brentq')
+        self.HystComp.tau = storedTau
         if not sol.converged:
             raise RuntimeError("Asymptotic Vmem solution did not converge.")
         return sol.root
 
     
     def Step(self, t, dt, Vin):
+        """
+        A function which solves the ODE for Vmem and updates the circuit state for each new time point.
+        """
         def WidthUpdate(t):
             if self.isInSpike == False and self.Vout >= self.HystComp.Isat0:
                 self.isInSpike = True
@@ -106,9 +113,11 @@ class LIF_Circuit:
                 self.isInSpike = False
                 self.spikeWidths.append(t - self.t_temp)
                 self.t_temp = t
-
-        Ids = self.SolveRecursiveIds(self.Vmem, self.Vout)
-        #print(f"Ids = {Ids}")
+        if self.HystComp2 == None:
+            Ids = self.SolveRecursiveIds(self.Vmem, self.Vout)
+        else:
+            self.HystComp2.Update(self.Vout, t, Vpower=self.Vmem)
+            Ids = self.HystComp2.current
         if Vin < self.Vmem:
             dVmem = (-Ids/self.C - self.Vmem/(self.Rl*self.C))*dt
         else:
@@ -129,33 +138,57 @@ class LIF_Circuit:
 
 def main():
     def Stepfunction(t):
+        """
+        A heaviside step function that turns on at t = 0
+        """
         if t >= 0:
             return 1
         else:
             return 0
         
     def SpikeTrain(t):
+        """
+        Gives a spike train as output with shape defined inside the function.
+        """
         tSpike = 3e-7
         tPause = 27e-7
         tTot = tSpike + tPause
-        if t%tTot < tPause:
-            return 0
+        if t < 5e-6 or t > 10e-6:
+            if t%tTot < tPause:
+                return 0
+            else:
+                return 1
         else:
-            return 1
+            return 0
         
     def CircuitTest(Circuit, T, N, VinFunc, plot=False, sideBySide=False):
+        """
+        A function which performs a simulation in N time steps until time T.
+
+        Vinfunc is a function describing Vin in time.
+        Easiest is to use Stepfunction(t)
+
+        The function outputs a list containin the spike widths, the time between
+        spikes and the frequency, all determined from the last spikes.
+        
+        If plot is set to True, a plot is generated showing the time evolution.
+
+        If sideBySide is set to True, this plot shows the three voltages separately.
+        """
         dt = T/(N-1)
         tlist = np.linspace(0,T,N)
         Vinlist  = []
         Voutlist = []
         Vmemlist = []
         Vdslist  = []
+        Ilist = []
 
         for t in tlist:
             Vin = VinFunc(t)
             #if t > 3e-6 and t < 10e-6:
             #    Vin = 0
-            Vdslist.append(Circuit.Vmem - Circuit.Rs*Circuit.Step(t, dt, Vin))
+            Ilist.append(Circuit.Step(t, dt, Vin))
+            Vdslist.append(Circuit.Vmem - Circuit.Rs*Ilist[-1])
             Vinlist.append(Vin)
             Voutlist.append(Circuit.Vout)
             Vmemlist.append(Circuit.Vmem)
@@ -172,22 +205,27 @@ def main():
                 plt.xticks(fontsize=14)
                 plt.yticks(fontsize=14)
                 plt.subplots_adjust(bottom=0.125)
-                plt.title("Neuron dynamics: hysteresis device never turns off", fontsize=14)
+                #plt.title("Neuron dynamics: hysteresis device never turns off", fontsize=14)
                 #plt.legend(loc=(0.04,0.68), fontsize=14)
                 plt.legend(fontsize=14)
             else:
                 fig, axs = plt.subplots(3, sharey=True)
                 fig.suptitle('Neuron dynamics: simulated adaptivity')
                 axs[0].plot(tlist, Vinlist)
+                axs[0].set(ylabel=r'$\mathregular{V_{in}}$'+' [V]')
                 axs[1].plot(tlist, Vmemlist, 'tab:orange')
+                axs[1].set(ylabel=r'$\mathregular{V_{mem}}$'+' [V]')
                 axs[2].plot(tlist, Voutlist, 'tab:green')
+                axs[2].set(ylabel=r'$\mathregular{V_{out}}$'+' [V]')
+                plt.subplots_adjust(top=0.93)
                 for ax in axs.flat:
-                    ax.set(xlabel='t [μs]', ylabel='V [V]')
+                    ax.set(xlabel='t [μs]')
 
                 # Hide x labels and tick labels for top plots and y ticks for right plots.
                 for ax in axs.flat:
                     ax.label_outer()
             plt.show()
+            print(f"Maximum Ids = {max(Ilist)}")
 
         if not len(Circuit.spikeWidths) == 0 and not len(Circuit.timeBetweenSpikes) == 0:
             #print(f"Width of spikes: {Circuit.spikeWidths}")
@@ -200,20 +238,32 @@ def main():
         else:
             return [0,0,0]
         
-    
-    MOSFET = FET(0.6,0,3e-5)
-    Vstart = 0.1
-    Vsat = 0.6
-    Isat = 1
-    Vhl = 0.6
-    Vlh = 0.1
-    HystDevice = AFE_FET(Vstart,Vsat,Isat,1e3,1e3,Vhl,Vlh,1e-2,0.02,0.01,0)
-    Circuit = LIF_Circuit(4e5, 4e6, 1e1, 1e-12, HystDevice, MOSFET)
-    #print(CircuitTest(Circuit, 0.000032, 40001, plot = True, sideBySide=True))
-    #print(Circuit.GetAsymptote(1))
-    
+    """
+    Example run
+    """
+    HystDevice = AFE_FET(0.3, 0.6, 1, 1e3, 1e3, 0.6, 0.3, 1e-2, 0, 0, 0)
+    MOSFET = FET(0.6,0,2e-6)
+    Circuit = LIF_Circuit(1e7, 1e12, 1e1, 1e-11, HystDevice, MOSFET)
+    CircuitTest(Circuit, 0.00025, 10001, Stepfunction, plot = True)
+    print(f"Spike widths: {Circuit.spikeWidths}")
+    print(f"Time between spikes: {Circuit.timeBetweenSpikes}")
 
+    
     def AsymptoteSearch(parameter):
+        """
+        This function plots the dependence of the on-state asymptote on a
+        parameter. 'parameter' is a string describing which parameter should
+        be investigated.
+
+        Valid choices:
+        Rin
+        Rl
+        C
+        K
+        Vth
+
+        Specifics of this sweep and the circuit can be changed inside the function.
+        """
         Vstart = 0.1
         Vsat = 0.7
         Isat = 1
@@ -277,6 +327,11 @@ def main():
 
 
     def GridSearch():
+        """
+        This function plots the 2D dependence of the output spike frequency 
+        as a function of Vlh and Vhl. The ratio between the time between 
+        spikes and the spike width is kept around 9.
+        """
         def Ratio(result):
             if abs(result[0]) > 1e-12:
                 #print(result[0])
@@ -353,6 +408,10 @@ def main():
 
 
     def FET_VgsSweep():
+        """
+        This function plots Ids of the FET class for different Vgs and Vds. 
+        It is meant as a sanity check to verify that the FET behaviour is realistic.
+        """
         Vgslist = [0, 2, 4, 6]
         Vdslist = np.linspace(0, 10, 100)
         TestFET = FET(0.6, 0, 2e-5)
@@ -372,31 +431,11 @@ def main():
     #FET_VgsSweep()
             
 
-
-    def FETCheck(Vth, l, K):
-        TestFET = FET(Vth, l, K)
-        Vlist = np.linspace(0,10,201)
-        Vrange = [0,1,2,4,6]
-        Ilist = []
-        for Vgs in Vlist:
-            Ilist.append(TestFET.GetIds(Vgs, 5))
-        #plt.plot(Vlist, Ilist)
-        #plt.xlabel("Vgs")
-        #plt.ylabel("Ids")
-        #plt.show()
-
-        for Vgs in Vrange:
-            Ilist = []
-            for Vds in Vlist:
-                Ilist.append(TestFET.GetIds(Vgs, Vds))
-            plt.plot(Vlist, Ilist)
-            plt.title(f"Vgs = {str(Vgs)}")
-            plt.xlabel("Vds")
-            plt.ylabel("Ids")
-            plt.show()
-    #FETCheck(0.6,0,2e-5)
-
     def VinPlot():
+        """
+        This function plots the frequency of the output spikes as a function of 
+        the amplitude of a constant input signal.
+        """
         MOSFET = FET(0.7,0,2e-5)
         Vstart = 0.1
         Vsat = 0.7
